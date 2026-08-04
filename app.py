@@ -32,7 +32,7 @@ if api_key:
             try:
 
                 resposta = client.chat.completions.create(
-                    model="deepseek/deepseek-chat-v3-0324:free",
+                    model="openrouter/free",
                     messages=[
                         {
                             "role": "system",
