@@ -1,66 +1,80 @@
-importar streamlit como st
-do Openai Import OpenAI.
+import streamlit as st
+from openai import OpenAI
 
-st. set_page_config(
-page_title="🤖 Alex IA Ultra",
-page_icon="🤖",
-layout="wide"
+st.set_page_config(
+    page_title="🤖 Alex IA Ultra",
+    page_icon="🤖",
+    layout="wide"
 )
 
-st. título("🤖 Alex IA Ultra")
-st. escrever("Sua inteligência avançada artificial")
+st.title("🤖 Alex IA Ultra")
+st.write("Sua inteligência artificial avançada")
 
-experimente:
-pi_key = st. Segredos["OPENROUTER_API_KEY"]
-
-Cliente = OpenAI(
-pi_key=api_key,
-base_url="https://openrouter.ai/api/v1"
+api_key = st.text_input(
+    "Digite sua chave do OpenRouter:",
+    type="password"
 )
 
- se "mensagens" não em st. session_state:
- st. session_state. @NOTRANSLATE =
- {
-"role": "system",
-"conteúdo": "Você é um Alex IA Ultra, uma inteligência artificial avançada criada por Geovani. Responda sempre em portugueses de forma intransitável. "
-}
-@FBENTITY
+if api_key:
 
-@FBENTITY em St. session_state. automaticamente
-["role"] ! = "sistema":
- com st. chat_mensage(mensagem["role"]):
- st. escrever(mensagem["conteúdo])
+    try:
+        client = OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1"
+        )
 
-pergunta = st. chat_input("Converse com Alex IA Ultra... ")
+        if "mensagens" not in st.session_state:
+            st.session_state.mensagens = [
+                {
+                    "role": "system",
+                    "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani. Responda sempre em português de forma inteligente e útil."
+                }
+            ]
 
- se perguntar:
+        if st.sidebar.button("🗑️ Limpar conversa"):
+            st.session_state.mensagens = [
+                {
+                    "role": "system",
+                    "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani."
+                }
+            ]
+            st.rerun()
 
- st. session_state. xícara. apend(
- {
-"role": "utilizador",
-"conteúdo": pergunta
-}
-)
+        for mensagem in st.session_state.mensagens:
+            if mensagem["role"] != "system":
+                with st.chat_message(mensagem["role"]):
+                    st.write(mensagem["content"])
 
- com st. chat_mensage("utilizador"):
- st. escrever(pergunta)
+        pergunta = st.chat_input("Converse com a Alex IA Ultra...")
 
-resposta = cliente. chat. finalizações criar(
-model="openrouter/livre",
- mensagens=st. session_state. automaticamente
-)
+        if pergunta:
 
- texto = resposta. escolhas[0]. mensagem. conteúdos
+            st.session_state.mensagens.append(
+                {
+                    "role": "user",
+                    "content": pergunta
+                }
+            )
 
- st. session_state. xícara. apend(
- {
-"controlo": "assistente",
-"conteúdo": texto
-}
-)
+            with st.chat_message("user"):
+                st.write(pergunta)
 
- com st. chat_mensage("assistente"):
- st. escrever(texto)
+            resposta = client.chat.completions.create(
+                model="openrouter/free",
+                messages=st.session_state.mensagens
+            )
 
-Exceção como e:
- st. erro(f"Erro: {e})
+            texto = resposta.choices[0].message.content
+
+            st.session_state.mensagens.append(
+                {
+                    "role": "assistant",
+                    "content": texto
+                }
+            )
+
+            with st.chat_message("assistant"):
+                st.write(texto)
+
+    except Exception as e:
+        st.error(f"Erro: {e}")
