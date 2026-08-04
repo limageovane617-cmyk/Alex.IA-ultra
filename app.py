@@ -28,13 +28,14 @@ if api_key:
             st.session_state.mensagens = [
                 {
                     "role": "system",
-                    "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani. Responda sempre em português."
+                    "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani. Responda sempre em português de forma inteligente."
                 }
             ]
 
         if "arquivo_texto" not in st.session_state:
             st.session_state.arquivo_texto = ""
 
+        # Área de arquivos
         st.sidebar.title("📄 Arquivos")
 
         arquivo = st.sidebar.file_uploader(
@@ -48,6 +49,7 @@ if api_key:
                 st.session_state.arquivo_texto = arquivo.read().decode("utf-8")
 
             elif arquivo.type == "application/pdf":
+
                 leitor = PyPDF2.PdfReader(arquivo)
 
                 texto = ""
@@ -57,7 +59,7 @@ if api_key:
 
                 st.session_state.arquivo_texto = texto
 
-            st.sidebar.success("Arquivo carregado!")
+            st.sidebar.success("Arquivo carregado com sucesso!")
 
         if st.sidebar.button("🗑️ Limpar conversa"):
             st.session_state.mensagens = [
@@ -66,10 +68,14 @@ if api_key:
                     "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani."
                 }
             ]
+            st.session_state.arquivo_texto = ""
             st.rerun()
 
+        # Mostrar conversa
         for mensagem in st.session_state.mensagens:
+
             if mensagem["role"] != "system":
+
                 with st.chat_message(mensagem["role"]):
                     st.write(mensagem["content"])
 
@@ -82,10 +88,13 @@ if api_key:
             contexto = ""
 
             if st.session_state.arquivo_texto:
+
                 contexto = f"""
-Use este arquivo como referência:
+
+Use este arquivo como base para responder:
 
 {st.session_state.arquivo_texto}
+
 """
 
             st.session_state.mensagens.append(
