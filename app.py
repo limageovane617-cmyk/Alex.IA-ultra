@@ -8,31 +8,41 @@ st.set_page_config(
 )
 
 st.title("🤖 Alex IA Ultra")
+st.caption("Sua inteligência artificial pessoal")
 
-api_key = st.text_input(
-    "Digite sua chave do OpenRouter:",
-    type="password"
-)
-
-if "mensagens" not in st.session_state:
-    st.session_state.mensagens = [
-        {
-            "role": "system",
-            "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani. Responda sempre em português."
-        }
-    ]
-
-if api_key:
+try:
+    api_key = st.secrets["OPENROUTER_API_KEY"]
 
     client = OpenAI(
         api_key=api_key,
         base_url="https://openrouter.ai/api/v1"
     )
 
-    for msg in st.session_state.mensagens:
-        if msg["role"] != "system":
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
+    if "mensagens" not in st.session_state:
+        st.session_state.mensagens = [
+            {
+                "role": "system",
+                "content": """
+Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani.
+Você responde em português, ajuda o usuário, explica assuntos,
+cria ideias, escreve textos e auxilia em projetos.
+"""
+            }
+        ]
+
+    if st.sidebar.button("🗑️ Limpar conversa"):
+        st.session_state.mensagens = [
+            {
+                "role": "system",
+                "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani."
+            }
+        ]
+        st.rerun()
+
+    for mensagem in st.session_state.mensagens:
+        if mensagem["role"] != "system":
+            with st.chat_message(mensagem["role"]):
+                st.write(mensagem["content"])
 
     pergunta = st.chat_input("Converse com a Alex IA Ultra...")
 
@@ -46,26 +56,24 @@ if api_key:
         )
 
         with st.chat_message("user"):
-            st.markdown(pergunta)
+            st.write(pergunta)
 
-        try:
+        resposta = client.chat.completions.create(
+            model="openrouter/free",
+            messages=st.session_state.mensagens
+        )
 
-            resposta = client.chat.completions.create(
-                model="openrouter/free",
-                messages=st.session_state.mensagens
-            )
+        texto = resposta.choices[0].message.content
 
-            texto = resposta.choices[0].message.content
+        st.session_state.mensagens.append(
+            {
+                "role": "assistant",
+                "content": texto
+            }
+        )
 
-            st.session_state.mensagens.append(
-                {
-                    "role": "assistant",
-                    "content": texto
-                }
-            )
+        with st.chat_message("assistant"):
+            st.write(texto)
 
-            with st.chat_message("assistant"):
-                st.markdown(texto)
-
-        except Exception as e:
-            st.error(f"Erro: {e}")
+except Exception as e:
+    st.error(f"Erro: {e}")
