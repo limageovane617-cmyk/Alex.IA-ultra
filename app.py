@@ -3,11 +3,12 @@ from openai import OpenAI
 
 st.set_page_config(
     page_title="🤖 Alex IA Ultra",
-    page_icon="🤖"
+    page_icon="🤖",
+    layout="wide"
 )
 
 st.title("🤖 Alex IA Ultra")
-st.write("Sua IA usando OpenRouter")
+st.write("Sua Inteligência Artificial usando OpenRouter")
 
 api_key = st.text_input(
     "Digite sua chave do OpenRouter:",
@@ -15,23 +16,38 @@ api_key = st.text_input(
 )
 
 if api_key:
-    try:
-        client = OpenAI(
-            api_key=api_key,
-            base_url="https://openrouter.ai/api/v1"
-        )
 
-        pergunta = st.text_input("Pergunte alguma coisa:")
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://openrouter.ai/api/v1"
+    )
 
-        if st.button("Enviar") and pergunta:
-            resposta = client.chat.completions.create(
-                model="meta-llama/llama-3.3-70b-instruct:free",
-                messages=[
-                    {"role": "user", "content": pergunta}
-                ]
-            )
+    pergunta = st.text_input("Pergunte qualquer coisa para a Alex IA Ultra:")
 
-            st.success(resposta.choices[0].message.content)
+    if st.button("Enviar"):
 
-    except Exception as e:
-        st.error(f"Erro: {e}")
+        if pergunta.strip() == "":
+            st.warning("Digite uma pergunta.")
+        else:
+            try:
+
+                resposta = client.chat.completions.create(
+                    model="deepseek/deepseek-chat-v3-0324:free",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani. Responda sempre em português de forma inteligente, útil e educada."
+                        },
+                        {
+                            "role": "user",
+                            "content": pergunta
+                        }
+                    ],
+                    temperature=0.7,
+                    max_tokens=1500
+                )
+
+                st.success(resposta.choices[0].message.content)
+
+            except Exception as e:
+                st.error(f"Erro: {e}")
