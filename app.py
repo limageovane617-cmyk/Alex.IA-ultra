@@ -68,7 +68,17 @@ Se o usuário pedir um roteiro, crie:
 - Cenas com diálogos.
 
 Seja criativo, organizado e ajude Geovani a desenvolver seus projetos.
+Personagem principal:
 
+Nome: {nome_personagem}
+
+Idade: {idade_personagem}
+
+Aparência: {aparencia_personagem}
+
+Roupa: {roupa_personagem}
+
+Personalidade: {personalidade_personagem}
 Pergunta do usuário:
 {pergunta}
 """
