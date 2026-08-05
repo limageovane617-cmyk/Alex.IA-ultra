@@ -13,7 +13,7 @@ st.caption("Sua inteligência artificial pessoal")
 
 # Campo da chave API
 api_key = st.text_input(
-    "Digite sua chave da API Gemini:",
+    "ola Geovani sua chave da API :",
     type="password"
 )
 
