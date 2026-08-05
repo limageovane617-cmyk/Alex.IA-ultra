@@ -1,5 +1,6 @@
 import streamlit as st
 from google import genai
+import json
 
 # Configuração da página
 st.set_page_config(
@@ -16,6 +17,11 @@ if "mensagens" not in st.session_state:
     
 if "personagem" not in st.session_state:
     st.session_state.personagem = {}
+try:
+    with open("personagens.json", "r", encoding="utf-8") as arquivo:
+        personagens_salvos = json.load(arquivo)
+except:
+    personagens_salvos = {}
 # Campo da chave API
 api_key = st.text_input(
     "ola Geovani sua chave da API :",
