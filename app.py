@@ -120,7 +120,7 @@ if pergunta:
                     
                     payload = {
                         "model": modelo_selecionado,
-                        "messages": mensagens_api
+                        "messages": mensajes_api
                     }
 
                     # Faz a requisição POST
@@ -138,11 +138,14 @@ if pergunta:
                             st.write(texto_resposta)
                             st.session_state.mensagens.append({"role": "assistant", "content": texto_resposta})
                         except Exception:
-                            st.error("⚠️ O OpenRouter enviou uma resposta inválida. Tente mudar o cérebro da IA na barra lateral.")
+                            # MOSTRA O ERRO REAL: Caso o JSON não tenha 'choices', exibe o texto bruto enviado do servidor
+                            st.error("⚠️ Resposta inesperada do OpenRouter:")
+                            st.code(response.text)
                     elif response.status_code == 401:
                         st.error("❌ Chave de API inválida! Verifique se copiou a chave do OpenRouter corretamente.")
                     else:
-                        st.error(f"❌ Erro do OpenRouter ({response.status_code}): O modelo selecionado pode estar fora do ar. Mude o cérebro da IA na barra lateral.")
+                        st.error(f"❌ Erro do OpenRouter (Código {response.status_code}):")
+                        st.code(response.text)
                 
                 except Exception as api_error:
                     st.error(f"Erro ao conectar com o servidor: {api_error}")
