@@ -61,8 +61,7 @@ if api_key:
         # Campo da pergunta
         pergunta = st.chat_input("Digite sua mensagem...")
         
-
-                if pergunta:
+            if pergunta:
 
             if modo == "🎭 Personagem":
                 contexto_personagem = f"""
