@@ -62,11 +62,28 @@ if api_key:
         pergunta = st.chat_input("Digite sua mensagem...")
         
 
-        if pergunta:
+                if pergunta:
+
+            if modo == "🎭 Personagem":
+                contexto_personagem = f"""
+Personagem principal:
+
+Nome: {nome_personagem}
+
+Idade: {idade_personagem}
+
+Aparência: {aparencia_personagem}
+
+Roupa: {roupa_personagem}
+
+Personalidade: {personalidade_personagem}
+"""
+            else:
+                contexto_personagem = ""
 
             resposta = cliente.models.generate_content(
-              model="gemini-3.1-flash-lite",
-              contents=f"""
+                model="gemini-3.1-flash-lite",
+                contents=f"""
 Você é o Alex IA, uma inteligência artificial avançada.
 
 Modo atual:
@@ -85,31 +102,14 @@ Se o modo for "🎭 Personagem":
 
 Você sempre responde em português do Brasil.
 
-Se o usuário pedir um roteiro, crie:
-- Título
-- Gênero
-- Sinopse
-- Personagens
-- Cenas com diálogos.
-
 Seja criativo, organizado e ajude Geovani a desenvolver seus projetos.
 
-Personagem principal:
-
-Nome: {nome_personagem}
-
-Idade: {idade_personagem}
-
-Aparência: {aparencia_personagem}
-
-Roupa: {roupa_personagem}
-
-Personalidade: {personalidade_personagem}
+{contexto_personagem}
 
 Pergunta do usuário:
 {pergunta}
 """
-             
+            )
 
             st.subheader("🤖 Alex IA respondeu:")
             st.write(resposta.text)
