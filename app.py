@@ -1,5 +1,5 @@
 import streamlit as st
-import requests
+from openai import OpenAI
 import PyPDF2
 
 st.set_page_config(
@@ -9,143 +9,147 @@ st.set_page_config(
 )
 
 st.title("🤖 Alex IA Ultra")
-st.caption("Sua inteligência artificial avançada e personalizada")
+st.caption("Sua inteligência artificial pessoal")
 
-# Barra Lateral Organizável
+# Área de configurações na barra lateral
 st.sidebar.title("⚙️ Configurações")
 
 api_key = st.sidebar.text_input(
-    "Chave do OpenRouter:",
+    "Digite sua chave do OpenRouter:",
     type="password"
 )
 
-# Seletor de Modelos Dinâmico (Colocando o Llama 3 como padrão por estabilidade)
+# NOVA FUNÇÃO 1: Seletor de Modelos na barra lateral
 modelo_selecionado = st.sidebar.selectbox(
     "Escolha o cérebro da IA:",
     options=[
+        "openrouter/free", 
         "meta-llama/llama-3-8b-instruct:free", 
         "mistralai/mistral-7b-instruct:free",
-        "google/gemma-2-9b-it:free",
-        "openrouter/free"
+        "google/gemma-2-9b-it:free"
     ],
     index=0,
-    help="Selecione o modelo de IA que processará suas mensagens."
+    help="Selecione o modelo do OpenRouter que processará as mensagens."
 )
 
-if "mensagens" not in st.session_state:
-    st.session_state.mensagens = []
+if api_key:
 
-if "arquivo_texto" not in st.session_state:
-    st.session_state.arquivo_texto = ""
+    try:
+        client = OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai"
+        )
 
-# Área de arquivos na barra lateral
-st.sidebar.markdown("---")
-st.sidebar.title("📄 Upload de Documentos")
+        if "mensagens" not in st.session_state:
+            st.session_state.mensagens = [
+                {
+                    "role": "system",
+                    "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani. Responda sempre em português de forma inteligente."
+                }
+            ]
 
-arquivo = st.sidebar.file_uploader(
-    "Envie um arquivo para contextualizar a IA",
-    type=["txt", "pdf"]
-)
+        if "arquivo_texto" not in st.session_state:
+            st.session_state.arquivo_texto = ""
 
-if arquivo:
-    with st.sidebar.spinner("Processando documento..."):
-        if arquivo.type == "text/plain":
-            st.session_state.arquivo_texto = arquivo.read().decode("utf-8")
-        elif arquivo.type == "application/pdf":
-            leitor = PyPDF2.PdfReader(arquivo)
-            texto = ""
-            for pagina in leitor.pages:
-                texto += pagina.extract_text() or ""
-            st.session_state.arquivo_texto = texto
-        
-    st.sidebar.success("Arquivo carregado com sucesso!")
-    
-    # Mini-Indicador de tamanho do documento
-    tamanho_caracteres = len(st.session_state.arquivo_texto)
-    st.sidebar.info(f"O documento possui aprox. {tamanho_caracteres} caracteres.")
+        # Área de arquivos
+        st.sidebar.markdown("---")
+        st.sidebar.title("📄 Arquivos")
 
-# Botão para limpar o histórico
-st.sidebar.markdown("---")
-if st.sidebar.button("🗑️ Limpar Conversa", use_container_width=True):
-    st.session_state.mensagens = []
-    st.session_state.arquivo_texto = ""
-    st.rerun()
+        arquivo = st.sidebar.file_uploader(
+            "Envie um arquivo",
+            type=["txt", "pdf"]
+        )
 
-# Mostrar o histórico de conversas na tela
-for mensagem in st.session_state.mensagens:
-    with st.chat_message(mensagem["role"]):
-        st.write(mensagem["content"])
+        if arquivo:
+            # NOVA FUNÇÃO 3: Spinner visual para indicar leitura do arquivo
+            with st.sidebar.spinner("Processando documento..."):
+                if arquivo.type == "text/plain":
+                    st.session_state.arquivo_texto = arquivo.read().decode("utf-8")
 
-# Input do usuário
-pergunta = st.chat_input("Converse com a Alex IA Ultra...")
+                elif arquivo.type == "application/pdf":
 
-if pergunta:
-    if not api_key:
-        st.error("🔑 Por favor, insira sua chave do OpenRouter na barra lateral primeiro!")
-    else:
-        # Exibe e guarda a pergunta do usuário no histórico visível
-        with st.chat_message("user"):
-            st.write(pergunta)
-        
-        st.session_state.mensagens.append({"role": "user", "content": pergunta})
+                    leitor = PyPDF2.PdfReader(arquivo)
 
-        # Prepara a estrutura do prompt de sistema (Corrigido: mensagens_api)
-        mensagens_api = [
-            {
-                "role": "system",
-                "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani. Responda sempre em português de forma inteligente, prestativa e objetiva."
-            }
-        ]
+                    texto = ""
 
-        # Injeta o contexto do arquivo se ele existir
-        if st.session_state.arquivo_texto:
-            mensagens_api.append({
-                "role": "system",
-                "content": f"Use estritamente os dados abaixo para responder o usuário se a pergunta for sobre o documento:\n```{st.session_state.arquivo_texto}```"
-            })
+                    for pagina in leitor.pages:
+                        texto += pagina.extract_text() or ""
 
-        # Alinha o histórico do chat acumulado
-        mensagens_api.extend(st.session_state.mensagens)
+                    st.session_state.arquivo_texto = texto
 
-        # Resposta da IA via HTTP Direto protegida
-        with st.chat_message("assistant"):
-            with st.spinner("Pensando..."):
-                try:
-                    headers = {
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://streamlit.io",
-                        "X-Title": "Alex IA Ultra App"
-                    }
-                    
-                    payload = {
-                        "model": modelo_selecionado,
-                        "messages": mensagens_api # Variável corrigida aqui também!
-                    }
+            st.sidebar.success("Arquivo carregado com sucesso!")
+            
+            # NOVA FUNÇÃO 2: Indicador estatístico do tamanho do documento
+            tamanho_caracteres = len(st.session_state.arquivo_texto)
+            st.sidebar.info(f"O documento possui aprox. {tamanho_caracteres} caracteres.")
 
-                    # Faz a requisição POST
-                    response = requests.post(
-                        "https://openrouter.ai",
-                        headers=headers,
-                        json=payload
+        if st.sidebar.button("🗑️ Limpar conversa"):
+            st.session_state.mensagens = [
+                {
+                    "role": "system",
+                    "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani."
+                }
+            ]
+            st.session_state.arquivo_texto = ""
+            st.rerun()
+
+        # Mostrar conversa
+        for mensagem in st.session_state.mensagens:
+
+            if mensagem["role"] != "system":
+
+                with st.chat_message(mensagem["role"]):
+                    st.write(mensagem["content"])
+
+        pergunta = st.chat_input(
+            "Converse com a Alex IA Ultra..."
+        )
+
+        if pergunta:
+
+            contexto = ""
+
+            if st.session_state.arquivo_texto:
+
+                contexto = f"""
+
+Use este arquivo como base para responder:
+
+{st.session_state.arquivo_texto}
+
+"""
+
+            st.session_state.mensagens.append(
+                {
+                    "role": "user",
+                    "content": pergunta + contexto
+                }
+            )
+
+            with st.chat_message("user"):
+                st.write(pergunta)
+
+            with st.chat_message("assistant"):
+                # NOVA FUNÇÃO 3: Spinner visual de carregamento para a IA pensando
+                with st.spinner("Pensando..."):
+                    resposta = client.chat.completions.create(
+                        model=modelo_selecionado, # Vinculado à NOVA FUNÇÃO 1
+                        messages=st.session_state.mensagens
                     )
 
-                    if response.status_code == 200:
-                        try:
-                            dados = response.json()
-                            texto_resposta = dados["choices"][0]["message"]["content"]
-                            
-                            st.write(texto_resposta)
-                            st.session_state.mensagens.append({"role": "assistant", "content": texto_resposta})
-                        except Exception:
-                            st.error("⚠️ Resposta inesperada do OpenRouter:")
-                            st.code(response.text)
-                    elif response.status_code == 401:
-                        st.error("❌ Chave de API inválida! Verifique se copiou a chave do OpenRouter corretamente.")
-                    else:
-                        st.error(f"❌ Erro do OpenRouter (Código {response.status_code}):")
-                        st.code(response.text)
-                
-                except Exception as api_error:
-                    st.error(f"Erro ao conectar com o servidor: {api_error}")
-                    
+                    texto_resposta = resposta.choices[0].message.content
+                    st.write(texto_resposta)
+
+            st.session_state.mensagens.append(
+                {
+                    "role": "assistant",
+                    "content": texto_resposta
+                }
+            )
+
+    except Exception as e:
+        st.error(f"Erro: {e}")
+else:
+    # NOVA FUNÇÃO 4: Mensagem informativa amigável inicial
+    st.info("💡 Por favor, insira sua chave do OpenRouter na barra lateral esquerda para iniciar a Alex IA Ultra.")
+    
