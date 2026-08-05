@@ -13,7 +13,9 @@ st.caption("Olá Geovani! Eu sou sua inteligência artificial pessoal. Estou pro
 
 if "mensagens" not in st.session_state:
     st.session_state.mensagens = []
-
+    
+if "personagem" not in st.session_state:
+    st.session_state.personagem = {}
 # Campo da chave API
 api_key = st.text_input(
     "ola Geovani sua chave da API :",
