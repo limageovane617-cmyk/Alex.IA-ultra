@@ -1,128 +1,128 @@
-importar streamlit como st
-do Openai Import OpenAI.
-importar PyPDF2
+import streamlit as st
+from openai import OpenAI
+import PyPDF2
 
-st. set_page_config(
-page_title="🤖 Alex IA Ultra",
-page_icon="🤖",
-layout="wide"
+st.set_page_config(
+    page_title="🤖 Alex IA Ultra",
+    page_icon="🤖",
+    layout="wide"
 )
 
-st. título("🤖 Alex IA Ultra")
-st. legenda("Sua inteligência artificial)
+st.title("🤖 Alex IA Ultra")
+st.caption("Sua inteligência artificial pessoal")
 
-api_key = st. text_input(
-"Digite sua chave do OpenRouter:",
-tipo="password"
+api_key = st.text_input(
+    "Digite sua chave do OpenRouter:",
+    type="password"
 )
 
-se api_key:
+if api_key:
 
- experimente:
-Cliente = OpenAI(
-pi_key=api_key,
-base_url="https://openrouter.ai/api/v1"
-)
+    try:
+        client = OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1"
+        )
 
- se "mensagens" não em st. session_state:
- st. session_state. @NOTRANSLATE =
- {
-"role": "system",
-"conteúdo": "Você é um Alex IA Ultra, uma inteligência artificial avançada criada por Geovani. Responda sempre em português de forma inteligente. "
-}
-@FBENTITY
+        if "mensagens" not in st.session_state:
+            st.session_state.mensagens = [
+                {
+                    "role": "system",
+                    "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani. Responda sempre em português de forma inteligente."
+                }
+            ]
 
- se "arquivo_texto" não em st. session_state:
- st. session_state. Arquivo_texto = ""
+        if "arquivo_texto" not in st.session_state:
+            st.session_state.arquivo_texto = ""
 
-# Área de Arquivos
- st. barra lateral. título("📄 Arquivos")
+        # Área de arquivos
+        st.sidebar.title("📄 Arquivos")
 
-Arquivo = st. barra lateral. file_uploader(
-"Envie um Arquivo",
-tipo=["txt", "pdf"]
-)
+        arquivo = st.sidebar.file_uploader(
+            "Envie um arquivo",
+            type=["txt", "pdf"]
+        )
 
-Arquivo:
+        if arquivo:
 
-Arquivo. tipo == "Texto/plano":
- st. session_state. Arquivo_texto = Arquivo. ler(). descodificar("utf-8)
+            if arquivo.type == "text/plain":
+                st.session_state.arquivo_texto = arquivo.read().decode("utf-8")
 
- Elif Arquivo. tipo == "Candidatura/PDF":
+            elif arquivo.type == "application/pdf":
 
-Leitor = PyPDF2. PdfReader (arquivo)
+                leitor = PyPDF2.PdfReader(arquivo)
 
- texto = ""
+                texto = ""
 
-Pela pagina em leitor. páginas:
- texto += pagina. extract_text() ou ""
+                for pagina in leitor.pages:
+                    texto += pagina.extract_text() or ""
 
- st. session_state. Arquivo_texto = texto
+                st.session_state.arquivo_texto = texto
 
- st. barra lateral. sucesso("Arquivo carreado com sucesso! ")
+            st.sidebar.success("Arquivo carregado com sucesso!")
 
- se st. barra lateral. botão("🗑️ Limpar conversa"):
- st. session_state. @NOTRANSLATE =
- {
-"role": "system",
-"conteúdo": "Você é um Alex IA Ultra, uma inteligência artificial avançada criada por Geovani. "
-}
-@FBENTITY
- st. session_state. Arquivo_texto = ""
- st. repetição()
+        if st.sidebar.button("🗑️ Limpar conversa"):
+            st.session_state.mensagens = [
+                {
+                    "role": "system",
+                    "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani."
+                }
+            ]
+            st.session_state.arquivo_texto = ""
+            st.rerun()
 
-# Mostrar
-@FBENTITY em St. session_state. automaticamente
+        # Mostrar conversa
+        for mensagem in st.session_state.mensagens:
 
-["role"] ! = "sistema":
+            if mensagem["role"] != "system":
 
- com st. chat_mensage(mensagem["role"]):
- st. escrever(mensagem["conteúdo])
+                with st.chat_message(mensagem["role"]):
+                    st.write(mensagem["content"])
 
-pergunta = st. chat_input(
-"Converse com a Alex IA Ultra... "
-)
+        pergunta = st.chat_input(
+            "Converse com a Alex IA Ultra..."
+        )
 
- se perguntar:
+        if pergunta:
 
-contexto = ""
+            contexto = ""
 
- se st. session_state. Arquivo_texto:
+            if st.session_state.arquivo_texto:
 
-contexto = f"""
+                contexto = f"""
 
-Use este Arquivo como base para socorros:
+Use este arquivo como base para responder:
 
-{st. session_state. Arquivo_texto}
+{st.session_state.arquivo_texto}
 
-""
+"""
 
- st. session_state. xícara. apend(
- {
-"role": "utilizador",
-"conteúdo": pergunta + contexto
-}
-)
+            st.session_state.mensagens.append(
+                {
+                    "role": "user",
+                    "content": pergunta + contexto
+                }
+            )
 
- com st. chat_mensage("utilizador"):
- st. escrever(pergunta)
+            with st.chat_message("user"):
+                st.write(pergunta)
 
-resposta = cliente. chat. finalizações criar(
-model="openrouter/livre",
- mensagens=st. session_state. automaticamente
-)
+            resposta = client.chat.completions.create(
+                model="openrouter/free",
+                messages=st.session_state.mensagens
+            )
 
- texto_reposta = resposta escolhas[0]. mensagem. conteúdos
+            texto_resposta = resposta.choices[0].message.content
 
- st. session_state. xícara. apend(
- {
-"controlo": "assistente",
-"conteúdo": texto_resposta
-}
-)
+            st.session_state.mensagens.append(
+                {
+                    "role": "assistant",
+                    "content": texto_resposta
+                }
+            )
 
- com st. chat_mensage("assistente"):
- st. escrever(texto_resposta)
+            with st.chat_message("assistant"):
+                st.write(texto_resposta)
 
-Excepto Exceção como e:
- st. erro(f"Erro: {e})
+    except Exception as e:
+        st.error(f"Erro: {e}")
