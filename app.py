@@ -1,128 +1,166 @@
 import streamlit as st
 from openai import OpenAI
-import PyPDF2
+
+from config import (
+    OPENROUTER_URL,
+    DEFAULT_MODEL,
+    SYSTEM_PROMPT,
+)
 
 st.set_page_config(
-    page_title="🤖 Alex IA Ultra",
+    page_title="🤖 Alex IA Ultra V4",
     page_icon="🤖",
     layout="wide"
 )
 
-st.title("🤖 Alex IA Ultra")
-st.caption("Sua inteligência artificial pessoal")
+st.title("🤖 Alex IA Ultra V4")
+st.caption("Criada por Geovani")
 
-api_key = st.text_input(
-    "Digite sua chave do OpenRouter:",
+# ============================
+# SIDEBAR
+# ============================
+
+st.sidebar.title("⚙️ Configurações")
+
+api_key = st.sidebar.text_input(
+    "Chave da OpenRouter",
     type="password"
 )
 
+modelo = st.sidebar.text_input(
+    "Modelo",
+    value=DEFAULT_MODEL
+)
+
+temperatura = st.sidebar.slider(
+    "Criatividade",
+    0.0,
+    2.0,
+    0.7,
+    0.1
+)
+
+max_tokens = st.sidebar.slider(
+    "Máximo de Tokens",
+    100,
+    4000,
+    1200,
+    100
+)
+
+st.sidebar.divider()
+
+st.sidebar.subheader("📂 Recursos")
+
+st.sidebar.info(
+    "Os módulos serão ativados automaticamente."
+)
+
+# ============================
+# MEMÓRIA
+# ============================
+
+if "messages" not in st.session_state:
+
+    st.session_state.messages = [
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT
+        }
+    ]
+
+if "arquivo_texto" not in st.session_state:
+    st.session_state.arquivo_texto = ""
+
+# ============================
+# LIMPAR
+# ============================
+
+if st.sidebar.button("🗑 Limpar conversa"):
+
+    st.session_state.messages = [
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT
+        }
+    ]
+
+    st.session_state.arquivo_texto = ""
+
+    st.rerun()
+
+# ============================
+# MOSTRAR CHAT
+# ============================
+
+for mensagem in st.session_state.messages:
+
+    if mensagem["role"] != "system":
+
+        with st.chat_message(mensagem["role"]):
+
+            st.markdown(mensagem["content"])
+
+# ============================
+# CONEXÃO OPENROUTER
+# ============================
+
+cliente = None
+
 if api_key:
 
-    try:
-        client = OpenAI(
-            api_key=api_key,
-            base_url="https://openrouter.ai/api/v1"
-        )
+    cliente = OpenAI(
+        api_key=api_key,
+        base_url=OPENROUTER_URL
+    )
 
-        if "mensagens" not in st.session_state:
-            st.session_state.mensagens = [
-                {
-                    "role": "system",
-                    "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani. Responda sempre em português de forma inteligente."
-                }
-            ]
+# ============================
+# CHAT
+# ============================
 
-        if "arquivo_texto" not in st.session_state:
-            st.session_state.arquivo_texto = ""
+pergunta = st.chat_input(
+    "Pergunte qualquer coisa..."
+)
 
-        # Área de arquivos
-        st.sidebar.title("📄 Arquivos")
+if pergunta:
 
-        arquivo = st.sidebar.file_uploader(
-            "Envie um arquivo",
-            type=["txt", "pdf"]
-        )
+    st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": pergunta
+        }
+    )
 
-        if arquivo:
+    with st.chat_message("user"):
+        st.markdown(pergunta)
 
-            if arquivo.type == "text/plain":
-                st.session_state.arquivo_texto = arquivo.read().decode("utf-8")
+    if cliente:
 
-            elif arquivo.type == "application/pdf":
+        try:
 
-                leitor = PyPDF2.PdfReader(arquivo)
-
-                texto = ""
-
-                for pagina in leitor.pages:
-                    texto += pagina.extract_text() or ""
-
-                st.session_state.arquivo_texto = texto
-
-            st.sidebar.success("Arquivo carregado com sucesso!")
-
-        if st.sidebar.button("🗑️ Limpar conversa"):
-            st.session_state.mensagens = [
-                {
-                    "role": "system",
-                    "content": "Você é a Alex IA Ultra, uma inteligência artificial avançada criada por Geovani."
-                }
-            ]
-            st.session_state.arquivo_texto = ""
-            st.rerun()
-
-        # Mostrar conversa
-        for mensagem in st.session_state.mensagens:
-
-            if mensagem["role"] != "system":
-
-                with st.chat_message(mensagem["role"]):
-                    st.write(mensagem["content"])
-
-        pergunta = st.chat_input(
-            "Converse com a Alex IA Ultra..."
-        )
-
-        if pergunta:
-
-            contexto = ""
-
-            if st.session_state.arquivo_texto:
-
-                contexto = f"""
-
-Use este arquivo como base para responder:
-
-{st.session_state.arquivo_texto}
-
-"""
-
-            st.session_state.mensagens.append(
-                {
-                    "role": "user",
-                    "content": pergunta + contexto
-                }
+            resposta = cliente.chat.completions.create(
+                model=modelo,
+                messages=st.session_state.messages,
+                temperature=temperatura,
+                max_tokens=max_tokens,
             )
 
-            with st.chat_message("user"):
-                st.write(pergunta)
+            texto = resposta.choices[0].message.content
 
-            resposta = client.chat.completions.create(
-                model="openrouter/free",
-                messages=st.session_state.mensagens
-            )
-
-            texto_resposta = resposta.choices[0].message.content
-
-            st.session_state.mensagens.append(
+            st.session_state.messages.append(
                 {
                     "role": "assistant",
-                    "content": texto_resposta
+                    "content": texto
                 }
             )
 
             with st.chat_message("assistant"):
-                st.write(texto_resposta)
+                st.markdown(texto)
 
-    except Exception as e:
-        st.error(f"Erro: {e}")
+        except Exception as erro:
+
+            st.error(f"Erro: {erro}")
+
+    else:
+
+        st.warning("Digite sua chave da OpenRouter.")
