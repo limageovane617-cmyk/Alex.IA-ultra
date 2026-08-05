@@ -60,7 +60,7 @@ Seja criativo, organizado e ajude Geovani a desenvolver seus projetos.
 Pergunta do usuário:
 {pergunta}
 """
-    )
+           )
             
 Você sempre responde em português do Brasil.
 Se o usuário pedir um roteiro, crie uma história completa
