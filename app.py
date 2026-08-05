@@ -62,8 +62,8 @@ if api_key:
             st.session_state.mensagens = []
             st.rerun()
 
-       st.sidebar.header("🎭 Personagem")
-       st.sidebar.subheader("📚 Personagens salvos")
+    st.sidebar.header("🎭 Personagem")
+    st.sidebar.subheader("📚 Personagens salvos")
 
        cursor.execute("SELECT nome FROM personagens ORDER BY nome")
        lista_personagens = cursor.fetchall()
