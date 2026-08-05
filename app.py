@@ -62,6 +62,17 @@ if api_key:
                 "roupa": roupa_personagem,
                 "personalidade": personalidade_personagem,
             }
+
+            personagens_salvos[nome_personagem] = st.session_state.personagem
+
+            with open("personagens.json", "w", encoding="utf-8") as arquivo:
+                json.dump(
+                    personagens_salvos,
+                    arquivo,
+                    ensure_ascii=False,
+                    indent=4
+                )
+
             st.sidebar.success("✅ Personagem salvo!")
 
         # Campo da pergunta
