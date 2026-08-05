@@ -27,9 +27,9 @@ if api_key:
 
         # Campo da pergunta
         pergunta = st.chat_input("Digite sua mensagem...")
-        )
+        
 
-        if st.button("Enviar") and pergunta:
+        if pergunta:
 
             resposta = cliente.models.generate_content(
                 model="gemini-3.1-flash-lite",
