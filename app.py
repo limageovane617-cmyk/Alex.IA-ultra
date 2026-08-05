@@ -21,7 +21,7 @@ if api_key:
     try:
         client = OpenAI(
             api_key=api_key,
-            base_url="https://openrouter.ai"
+            base_url="https://openrouter.ai/api/v1"
         )
 
         if "mensagens" not in st.session_state:
@@ -70,33 +70,6 @@ if api_key:
             ]
             st.session_state.arquivo_texto = ""
             st.rerun()
-
-        # =================================================================
-        # NOVA FUNÇÃO: HISTÓRICO E EXPORTAÇÃO (APENAS NA BARRA LATERAL)
-        # =================================================================
-        st.sidebar.markdown("---")
-        st.sidebar.title("📊 Estatísticas & Opções")
-        
-        # Conta apenas mensagens que não são do sistema
-        total_mensagens = len([m for m in st.session_state.mensagens if m["role"] != "system"])
-        st.sidebar.metric(label="Total de Mensagens", value=total_mensagens)
-        
-        # Cria o texto formatado para download do histórico
-        historico_texto = ""
-        for m in st.session_state.mensagens:
-            if m["role"] != "system":
-                nome_usuario = "Você" if m["role"] == "user" else "Alex IA Ultra"
-                historico_texto += f"{nome_usuario}: {m['content']}\n\n"
-        
-        if total_mensagens > 0:
-            st.sidebar.download_button(
-                label="📥 Baixar conversa (.txt)",
-                data=historico_texto,
-                file_name="historico_alex_ia.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
-        # =================================================================
 
         # Mostrar conversa
         for mensagem in st.session_state.mensagens:
@@ -153,4 +126,3 @@ Use este arquivo como base para responder:
 
     except Exception as e:
         st.error(f"Erro: {e}")
-        
