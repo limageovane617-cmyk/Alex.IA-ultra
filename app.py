@@ -1,18 +1,44 @@
 import streamlit as st
 from google import genai
 
-st.title("Teste Gemini")
+# Configuração da página
+st.set_page_config(
+    page_title="Alex IA",
+    page_icon="🤖",
+    layout="wide"
+)
 
-api_key = st.text_input("Chave Gemini", type="password")
+st.title("🤖 Alex IA")
+st.caption("Sua inteligência artificial pessoal")
+
+# Campo da chave API
+api_key = st.text_input(
+    "Digite sua chave da API Gemini:",
+    type="password"
+)
 
 if api_key:
+
     try:
-        client = genai.Client(api_key=api_key)
+        # Conecta ao Gemini
+        cliente = genai.Client(api_key=api_key)
 
-        st.write("### Modelos disponíveis:")
+        st.success("✅ Gemini conectado com sucesso!")
 
-        for model in client.models.list():
-            st.write(model.name)
+        # Campo da pergunta
+        pergunta = st.text_input(
+            "Digite sua pergunta:"
+        )
+
+        if st.button("Enviar") and pergunta:
+
+            resposta = cliente.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=pergunta
+            )
+
+            st.subheader("🤖 Alex IA respondeu:")
+            st.write(resposta.text)
 
     except Exception as e:
-        st.error(e)
+        st.error(f"Erro: {e}")
