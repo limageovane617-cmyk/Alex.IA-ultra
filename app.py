@@ -89,7 +89,7 @@ if pergunta:
         
         st.session_state.mensagens.append({"role": "user", "content": pergunta})
 
-        # Prepara a estrutura do prompt de sistema
+        # Prepara a estrutura do prompt de sistema (Corrigido: mensagens_api)
         mensagens_api = [
             {
                 "role": "system",
@@ -120,7 +120,7 @@ if pergunta:
                     
                     payload = {
                         "model": modelo_selecionado,
-                        "messages": mensajes_api
+                        "messages": mensagens_api # Variável corrigida aqui também!
                     }
 
                     # Faz a requisição POST
@@ -138,7 +138,6 @@ if pergunta:
                             st.write(texto_resposta)
                             st.session_state.mensagens.append({"role": "assistant", "content": texto_resposta})
                         except Exception:
-                            # MOSTRA O ERRO REAL: Caso o JSON não tenha 'choices', exibe o texto bruto enviado do servidor
                             st.error("⚠️ Resposta inesperada do OpenRouter:")
                             st.code(response.text)
                     elif response.status_code == 401:
@@ -149,3 +148,4 @@ if pergunta:
                 
                 except Exception as api_error:
                     st.error(f"Erro ao conectar com o servidor: {api_error}")
+                    
