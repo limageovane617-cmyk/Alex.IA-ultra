@@ -18,6 +18,21 @@ if "mensagens" not in st.session_state:
     
 if "personagem" not in st.session_state:
     st.session_state.personagem = {}
+conn = sqlite3.connect("alexia.db")
+cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS personagens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT UNIQUE,
+    idade TEXT,
+    aparencia TEXT,
+    roupa TEXT,
+    personalidade TEXT
+)
+""")
+
+conn.commit()
 try:
     with open("personagens.json", "r", encoding="utf-8") as arquivo:
         personagens_salvos = json.load(arquivo)
