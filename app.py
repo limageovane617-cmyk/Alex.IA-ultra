@@ -1,6 +1,7 @@
 import streamlit as st
 from google import genai
 import json
+import sqlite3
 
 # Configuração da página
 st.set_page_config(
