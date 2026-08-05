@@ -34,7 +34,22 @@ if api_key:
 
             resposta = cliente.models.generate_content(
                 model="gemini-3.1-flash-lite",
-                contents=pergunta
+                contents=f"""
+Você é o Alex IA, uma inteligência artificial avançada.
+Seu objetivo é ajudar o usuário criando textos, roteiros,
+ideias, códigos e explicações detalhadas.
+
+Sempre responda em português do Brasil.
+Se o usuário pedir um roteiro, crie:
+- Título
+- Gênero
+- Sinopse
+- Personagens
+- Cenas com diálogos.
+
+Pergunta do usuário:
+{pergunta}
+"""
             )
 
             st.subheader("🤖 Alex IA respondeu:")
