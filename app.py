@@ -42,9 +42,6 @@ if api_key:
 
         # Campo da pergunta
         pergunta = st.chat_input("Digite sua mensagem...")
-
-        # Campo da pergunta
-        pergunta = st.chat_input("Digite sua mensagem...")
         
 
         if pergunta:
