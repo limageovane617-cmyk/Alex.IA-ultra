@@ -28,6 +28,21 @@ if api_key:
 
         st.success("✅ Gemini conectado com sucesso!")
 
+        st.sidebar.header("🎭 Personagem")
+
+        nome_personagem = st.sidebar.text_input("Nome")
+
+        idade_personagem = st.sidebar.text_input("Idade")
+
+        aparencia_personagem = st.sidebar.text_area("Aparência")
+
+        roupa_personagem = st.sidebar.text_input("Roupa")
+
+        personalidade_personagem = st.sidebar.text_area("Personalidade")
+
+        # Campo da pergunta
+        pergunta = st.chat_input("Digite sua mensagem...")
+
         # Campo da pergunta
         pergunta = st.chat_input("Digite sua mensagem...")
         
