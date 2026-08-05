@@ -1,6 +1,6 @@
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 
-DEFAULT_MODEL = "DEFAULT_MODEL = "openrouter/free"
+DEFAULT_MODEL = "openrouter/free"
 
 SYSTEM_PROMPT = """
 Você é Alex IA Ultra V4.
