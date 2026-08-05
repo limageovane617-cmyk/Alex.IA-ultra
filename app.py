@@ -60,29 +60,6 @@ Seja criativo, organizado e ajude Geovani a desenvolver seus projetos.
 Pergunta do usuário:
 {pergunta}
 """
-           )
-            
-Você sempre responde em português do Brasil.
-Se o usuário pedir um roteiro, crie uma história completa
-com título, gênero, personagens, cenas e diálogos.
-
-Seja criativo, organizado e ajude Geovani a desenvolver seus projetos.
-
-Mensagem do usuário:
-{pergunta}
-"""
-
-Sempre responda em português do Brasil.
-Se o usuário pedir um roteiro, crie:
-- Título
-- Gênero
-- Sinopse
-- Personagens
-- Cenas com diálogos.
-
-Pergunta do usuário:
-{pergunta}
-"""
             )
 
             st.subheader("🤖 Alex IA respondeu:")
