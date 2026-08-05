@@ -33,6 +33,8 @@ if api_key:
         if st.sidebar.button("🗑️ Limpar conversa"):
             st.session_state.mensagens = []
             st.rerun()
+            
+        st.sidebar.button("💾 Salvar personagem")
 
         st.sidebar.header("🎭 Personagem")
 
