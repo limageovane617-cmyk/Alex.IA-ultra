@@ -116,38 +116,28 @@ if api_key:
             # Alinha o histórico do chat acumulado
             mensagens_api.extend(st.session_state.mensagens)
 
-            # Resposta da IA com correção de Streaming para OpenRouter
+            # Resposta da IA (Modo Normal Seguro - Sem Streaming que trava)
             with st.chat_message("assistant"):
-                try:
-                    # Chamada com stream=True ativado
-                    stream = client.chat.completions.create(
-                        model=modelo_selecionado,
-                        messages=mensagens_api,
-                        stream=True  
-                    )
+                # Adiciona um spinner visual simples enquanto a IA pensa
+                with st.spinner("Pensando..."):
+                    try:
+                        # Chamada padrão segura
+                        resposta = client.chat.completions.create(
+                            model=modelo_selecionado,
+                            messages=mensagens_api
+                        )
 
-                    # Container dinâmico do Streamlit para o efeito de digitação
-                    placeholder = st.empty()
-                    texto_completo = ""
+                        # Captura o texto da resposta vindo direto do objeto estruturado
+                        texto_resposta = resposta.choices[0].message.content
+                        
+                        # Mostra o texto finalizado na tela
+                        st.write(texto_resposta)
 
-                    # Itera sobre os pedaços (chunks) de texto enviados pela API
-                    for chunk in stream:
-                        # Extrai o conteúdo do delta de streaming de forma segura
-                        if hasattr(chunk, 'choices') and len(chunk.choices) > 0:
-                            delta = chunk.choices[0].delta
-                            if hasattr(delta, 'content') and delta.content:
-                                texto_completo += delta.content
-                                # Exibe o texto atualizado com um cursor simulado
-                                placeholder.markdown(texto_completo + "▌")
-
-                    # Atualiza o container com o texto final sem o cursor
-                    placeholder.markdown(texto_completo)
-
-                    # Salva a resposta final gerada no histórico do session_state
-                    st.session_state.mensagens.append({"role": "assistant", "content": texto_completo})
-                
-                except Exception as api_error:
-                    st.error(f"Erro ao obter resposta da IA: {api_error}")
+                        # Salva a resposta gerada no histórico do session_state
+                        st.session_state.mensagens.append({"role": "assistant", "content": texto_resposta})
+                    
+                    except Exception as api_error:
+                        st.error(f"Erro ao obter resposta da IA: {api_error}")
 
     except Exception as e:
         st.error(f"Erro de inicialização do cliente: {e}")
