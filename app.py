@@ -82,6 +82,7 @@ Se o modo for "🤖 IA normal":
 Se o modo for "🎭 Personagem":
 - Use os dados do personagem salvo.
 - Crie histórias, cenas e roteiros usando o personagem.
+"""
 
 Você sempre responde em português do Brasil.
 
