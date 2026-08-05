@@ -9,7 +9,7 @@ st.set_page_config(
 )
 
 st.title("🤖 Alex IA")
-st.caption("Sua inteligência artificial pessoal")
+st.caption("Olá Geovani! Eu sou sua inteligência artificial pessoal. Estou pronto para criar, escrever, programar e ajudar você.")
 
 # Campo da chave API
 api_key = st.text_input(
