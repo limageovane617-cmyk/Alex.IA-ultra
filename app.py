@@ -98,7 +98,7 @@ if api_key:
             
             st.session_state.mensagens.append({"role": "user", "content": pergunta})
 
-            # Prepara a estrutura do prompt de sistema (invisível no chat direto)
+            # Prepara a estrutura do prompt de sistema
             mensagens_api = [
                 {
                     "role": "system",
@@ -106,7 +106,7 @@ if api_key:
                 }
             ]
 
-            # Injeta o contexto do arquivo se ele existir (separado do histórico de perguntas)
+            # Injeta o contexto do arquivo se ele existir
             if st.session_state.arquivo_texto:
                 mensagens_api.append({
                     "role": "system",
@@ -116,19 +116,28 @@ if api_key:
             # Alinha o histórico do chat acumulado
             mensagens_api.extend(st.session_state.mensagens)
 
-            # Resposta da IA (Modo Normal Seguro - Sem Streaming que trava)
+            # Resposta da IA (Modo Seguro Adaptável)
             with st.chat_message("assistant"):
-                # Adiciona um spinner visual simples enquanto a IA pensa
                 with st.spinner("Pensando..."):
                     try:
-                        # Chamada padrão segura
+                        # Chamada padrão estável
                         resposta = client.chat.completions.create(
                             model=modelo_selecionado,
                             messages=mensagens_api
                         )
 
-                        # Captura o texto da resposta vindo direto do objeto estruturado
-                        texto_resposta = resposta.choices[0].message.content
+                        # Sistema de extração inteligente à prova de falhas
+                        texto_resposta = ""
+                        
+                        if hasattr(resposta, "choices"):
+                            # Formato padrão de objeto da biblioteca OpenAI
+                            texto_resposta = resposta.choices[0].message.content
+                        elif isinstance(resposta, dict) and "choices" in resposta:
+                            # Formato caso o retorno venha como dicionário JSON bruto
+                            texto_resposta = resposta["choices"][0]["message"]["content"]
+                        else:
+                            # Fallback de segurança se o retorno for interpretado como string direta
+                            texto_resposta = str(resposta)
                         
                         # Mostra o texto finalizado na tela
                         st.write(texto_resposta)
@@ -143,4 +152,4 @@ if api_key:
         st.error(f"Erro de inicialização do cliente: {e}")
 else:
     st.info("💡 Por favor, insira sua chave do OpenRouter na barra lateral esquerda para começar.")
-    
+                            
