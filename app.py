@@ -82,7 +82,6 @@ Se o modo for "🤖 IA normal":
 Se o modo for "🎭 Personagem":
 - Use os dados do personagem salvo.
 - Crie histórias, cenas e roteiros usando o personagem.
-"""
 
 Você sempre responde em português do Brasil.
 
@@ -94,6 +93,7 @@ Se o usuário pedir um roteiro, crie:
 - Cenas com diálogos.
 
 Seja criativo, organizado e ajude Geovani a desenvolver seus projetos.
+
 Personagem principal:
 
 Nome: {nome_personagem}
@@ -105,10 +105,11 @@ Aparência: {aparencia_personagem}
 Roupa: {roupa_personagem}
 
 Personalidade: {personalidade_personagem}
+
 Pergunta do usuário:
 {pergunta}
 """
-            )
+             
 
             st.subheader("🤖 Alex IA respondeu:")
             st.write(resposta.text)
