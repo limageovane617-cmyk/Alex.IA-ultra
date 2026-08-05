@@ -33,26 +33,26 @@ if api_key:
         st.sidebar.header("⚙️ Ferramentas")
 
         if st.sidebar.button("🗑️ Limpar conversa"):
-            if st.sidebar.button("💾 Salvar personagem"):
-    st.session_state.personagem = {
-        "nome": nome_personagem,
-        "idade": idade_personagem,
-        "aparencia": aparencia_personagem,
-        "roupa": roupa_personagem,
-        "personalidade": personalidade_personagem,
-    }
-    st.sidebar.success("✅ Personagem salvo!")
+            st.session_state.mensagens = []
+            st.rerun()
+
         st.sidebar.header("🎭 Personagem")
 
         nome_personagem = st.sidebar.text_input("Nome")
-
         idade_personagem = st.sidebar.text_input("Idade")
-
         aparencia_personagem = st.sidebar.text_area("Aparência")
-
         roupa_personagem = st.sidebar.text_input("Roupa")
-
         personalidade_personagem = st.sidebar.text_area("Personalidade")
+
+        if st.sidebar.button("💾 Salvar personagem"):
+            st.session_state.personagem = {
+                "nome": nome_personagem,
+                "idade": idade_personagem,
+                "aparencia": aparencia_personagem,
+                "roupa": roupa_personagem,
+                "personalidade": personalidade_personagem,
+            }
+            st.sidebar.success("✅ Personagem salvo!")
 
         # Campo da pergunta
         pergunta = st.chat_input("Digite sua mensagem...")
