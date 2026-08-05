@@ -11,25 +11,9 @@ st.set_page_config(
 st.title("🤖 Alex IA Ultra")
 st.caption("Sua inteligência artificial pessoal")
 
-# Área de configurações na barra lateral
-st.sidebar.title("⚙️ Configurações")
-
-api_key = st.sidebar.text_input(
+api_key = st.text_input(
     "Digite sua chave do OpenRouter:",
     type="password"
-)
-
-# NOVA FUNÇÃO 1: Seletor de Modelos na barra lateral
-modelo_selecionado = st.sidebar.selectbox(
-    "Escolha o cérebro da IA:",
-    options=[
-        "openrouter/free", 
-        "meta-llama/llama-3-8b-instruct:free", 
-        "mistralai/mistral-7b-instruct:free",
-        "google/gemma-2-9b-it:free"
-    ],
-    index=0,
-    help="Selecione o modelo do OpenRouter que processará as mensagens."
 )
 
 if api_key:
@@ -52,7 +36,6 @@ if api_key:
             st.session_state.arquivo_texto = ""
 
         # Área de arquivos
-        st.sidebar.markdown("---")
         st.sidebar.title("📄 Arquivos")
 
         arquivo = st.sidebar.file_uploader(
@@ -61,27 +44,22 @@ if api_key:
         )
 
         if arquivo:
-            # NOVA FUNÇÃO 3: Spinner visual para indicar leitura do arquivo
-            with st.sidebar.spinner("Processando documento..."):
-                if arquivo.type == "text/plain":
-                    st.session_state.arquivo_texto = arquivo.read().decode("utf-8")
 
-                elif arquivo.type == "application/pdf":
+            if arquivo.type == "text/plain":
+                st.session_state.arquivo_texto = arquivo.read().decode("utf-8")
 
-                    leitor = PyPDF2.PdfReader(arquivo)
+            elif arquivo.type == "application/pdf":
 
-                    texto = ""
+                leitor = PyPDF2.PdfReader(arquivo)
 
-                    for pagina in leitor.pages:
-                        texto += pagina.extract_text() or ""
+                texto = ""
 
-                    st.session_state.arquivo_texto = texto
+                for pagina in leitor.pages:
+                    texto += pagina.extract_text() or ""
+
+                st.session_state.arquivo_texto = texto
 
             st.sidebar.success("Arquivo carregado com sucesso!")
-            
-            # NOVA FUNÇÃO 2: Indicador estatístico do tamanho do documento
-            tamanho_caracteres = len(st.session_state.arquivo_texto)
-            st.sidebar.info(f"O documento possui aprox. {tamanho_caracteres} caracteres.")
 
         if st.sidebar.button("🗑️ Limpar conversa"):
             st.session_state.mensagens = [
@@ -92,6 +70,33 @@ if api_key:
             ]
             st.session_state.arquivo_texto = ""
             st.rerun()
+
+        # =================================================================
+        # NOVA FUNÇÃO: HISTÓRICO E EXPORTAÇÃO (APENAS NA BARRA LATERAL)
+        # =================================================================
+        st.sidebar.markdown("---")
+        st.sidebar.title("📊 Estatísticas & Opções")
+        
+        # Conta apenas mensagens que não são do sistema
+        total_mensagens = len([m for m in st.session_state.mensagens if m["role"] != "system"])
+        st.sidebar.metric(label="Total de Mensagens", value=total_mensagens)
+        
+        # Cria o texto formatado para download do histórico
+        historico_texto = ""
+        for m in st.session_state.mensagens:
+            if m["role"] != "system":
+                nome_usuario = "Você" if m["role"] == "user" else "Alex IA Ultra"
+                historico_texto += f"{nome_usuario}: {m['content']}\n\n"
+        
+        if total_mensagens > 0:
+            st.sidebar.download_button(
+                label="📥 Baixar conversa (.txt)",
+                data=historico_texto,
+                file_name="historico_alex_ia.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+        # =================================================================
 
         # Mostrar conversa
         for mensagem in st.session_state.mensagens:
@@ -129,16 +134,12 @@ Use este arquivo como base para responder:
             with st.chat_message("user"):
                 st.write(pergunta)
 
-            with st.chat_message("assistant"):
-                # NOVA FUNÇÃO 3: Spinner visual de carregamento para a IA pensando
-                with st.spinner("Pensando..."):
-                    resposta = client.chat.completions.create(
-                        model=modelo_selecionado, # Vinculado à NOVA FUNÇÃO 1
-                        messages=st.session_state.mensagens
-                    )
+            resposta = client.chat.completions.create(
+                model="openrouter/free",
+                messages=st.session_state.mensagens
+            )
 
-                    texto_resposta = resposta.choices[0].message.content
-                    st.write(texto_resposta)
+            texto_resposta = resposta.choices[0].message.content
 
             st.session_state.mensagens.append(
                 {
@@ -147,9 +148,9 @@ Use este arquivo como base para responder:
                 }
             )
 
+            with st.chat_message("assistant"):
+                st.write(texto_resposta)
+
     except Exception as e:
         st.error(f"Erro: {e}")
-else:
-    # NOVA FUNÇÃO 4: Mensagem informativa amigável inicial
-    st.info("💡 Por favor, insira sua chave do OpenRouter na barra lateral esquerda para iniciar a Alex IA Ultra.")
-    
+        
