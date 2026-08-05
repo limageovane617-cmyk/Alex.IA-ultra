@@ -19,7 +19,7 @@ api_key = st.sidebar.text_input(
     type="password"
 )
 
-# FUNÇÃO 2: Seletor de Modelos Dinâmico (Modelos free mais estáveis da OpenRouter)
+# Seletor de Modelos Dinâmico (Modelos free estáveis da OpenRouter)
 modelo_selecionado = st.sidebar.selectbox(
     "Escolha o cérebro da IA:",
     options=[
@@ -34,6 +34,7 @@ modelo_selecionado = st.sidebar.selectbox(
 
 if api_key:
     try:
+        # Inicializa o cliente OpenRouter com cabeçalhos recomendados
         client = OpenAI(
             api_key=api_key,
             base_url="https://openrouter.ai",
@@ -71,7 +72,7 @@ if api_key:
                 
             st.sidebar.success("Arquivo carregado com sucesso!")
             
-            # FUNÇÃO 3: Mini-Indicador de tamanho do documento
+            # Mini-Indicador de tamanho do documento
             tamanho_caracteres = len(st.session_state.arquivo_texto)
             st.sidebar.info(f"O documento possui aprox. {tamanho_caracteres} caracteres.")
 
@@ -91,13 +92,13 @@ if api_key:
         pergunta = st.chat_input("Converse com a Alex IA Ultra...")
 
         if pergunta:
-            # Exibe e guarda a pergunta do usuário
+            # Exibe e guarda a pergunta do usuário no histórico visível
             with st.chat_message("user"):
                 st.write(pergunta)
             
             st.session_state.mensagens.append({"role": "user", "content": pergunta})
 
-            # Prepara a estrutura do prompt de sistema
+            # Prepara a estrutura do prompt de sistema (invisível no chat direto)
             mensagens_api = [
                 {
                     "role": "system",
@@ -105,17 +106,17 @@ if api_key:
                 }
             ]
 
-            # Injeta o contexto do arquivo se ele existir
+            # Injeta o contexto do arquivo se ele existir (separado do histórico de perguntas)
             if st.session_state.arquivo_texto:
                 mensagens_api.append({
                     "role": "system",
                     "content": f"Use estritamente os dados abaixo para responder o usuário se a pergunta for sobre o documento:\n```{st.session_state.arquivo_texto}```"
                 })
 
-            # Alinha o histórico do chat
+            # Alinha o histórico do chat acumulado
             mensagens_api.extend(st.session_state.mensagens)
 
-            # Resposta da IA com a FUNÇÃO 1: Efeito Streaming (Digitação Fluida)
+            # Resposta da IA com correção de Streaming para OpenRouter
             with st.chat_message("assistant"):
                 try:
                     # Chamada com stream=True ativado
@@ -125,11 +126,25 @@ if api_key:
                         stream=True  
                     )
 
-                    # st.write_stream renderiza o texto palavra por palavra automaticamente
-                    texto_resposta = st.write_stream(stream)
+                    # Container dinâmico do Streamlit para o efeito de digitação
+                    placeholder = st.empty()
+                    texto_completo = ""
+
+                    # Itera sobre os pedaços (chunks) de texto enviados pela API
+                    for chunk in stream:
+                        # Extrai o conteúdo do delta de streaming de forma segura
+                        if hasattr(chunk, 'choices') and len(chunk.choices) > 0:
+                            delta = chunk.choices[0].delta
+                            if hasattr(delta, 'content') and delta.content:
+                                texto_completo += delta.content
+                                # Exibe o texto atualizado com um cursor simulado
+                                placeholder.markdown(texto_completo + "▌")
+
+                    # Atualiza o container com o texto final sem o cursor
+                    placeholder.markdown(texto_completo)
 
                     # Salva a resposta final gerada no histórico do session_state
-                    st.session_state.mensagens.append({"role": "assistant", "content": texto_resposta})
+                    st.session_state.mensagens.append({"role": "assistant", "content": texto_completo})
                 
                 except Exception as api_error:
                     st.error(f"Erro ao obter resposta da IA: {api_error}")
