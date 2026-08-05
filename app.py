@@ -87,7 +87,20 @@ if api_key:
                     arquivo,
                     ensure_ascii=False,
                     indent=4
-                )
+              )
+            cursor.execute("""
+              INSERT OR REPLACE INTO personagens
+              (nome, idade, aparencia, roupa, personalidade)
+              VALUES (?, ?, ?, ?, ?)
+              """, (
+                 nome_personagem,
+                 idade_personagem,
+                 aparencia_personagem,
+                 roupa_personagem,
+                 personalidade_personagem
+               ))
+
+            conn.commit()
 
             st.sidebar.success("✅ Personagem salvo!")
 
