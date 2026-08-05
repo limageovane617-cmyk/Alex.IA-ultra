@@ -45,6 +45,8 @@ Seu objetivo é ajudar o usuário criando:
 - ideias criativas
 - códigos
 - explicações detalhadas
+"""
+)          
 
 Você sempre responde em português do Brasil.
 Se o usuário pedir um roteiro, crie uma história completa
