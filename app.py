@@ -33,11 +33,15 @@ if api_key:
         st.sidebar.header("⚙️ Ferramentas")
 
         if st.sidebar.button("🗑️ Limpar conversa"):
-            st.session_state.mensagens = []
-            st.rerun()
-            
-        st.sidebar.button("💾 Salvar personagem")
-
+            if st.sidebar.button("💾 Salvar personagem"):
+    st.session_state.personagem = {
+        "nome": nome_personagem,
+        "idade": idade_personagem,
+        "aparencia": aparencia_personagem,
+        "roupa": roupa_personagem,
+        "personalidade": personalidade_personagem,
+    }
+    st.sidebar.success("✅ Personagem salvo!")
         st.sidebar.header("🎭 Personagem")
 
         nome_personagem = st.sidebar.text_input("Nome")
