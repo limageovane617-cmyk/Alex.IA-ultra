@@ -1,6 +1,5 @@
 import streamlit as st
-from openai import OpenAI
-from config import OPENROUTER_URL, DEFAULT_MODEL, SYSTEM_PROMPT
+from google import genai
 
 st.set_page_config(
     page_title="🤖 Alex IA Ultra V4",
@@ -11,77 +10,34 @@ st.set_page_config(
 st.title("🤖 Alex IA Ultra V4")
 st.caption("Criada por Geovani")
 
-# Barra lateral
-st.sidebar.title("Configurações")
-
 api_key = st.sidebar.text_input(
-    "Chave da OpenRouter",
+    "🔑 Chave da API Gemini",
     type="password"
 )
 
-modelo = st.sidebar.text_input(
-    "Modelo",
-    value=DEFAULT_MODEL
-)
+if api_key:
 
-# Memória da conversa
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {
-            "role": "system",
-            "content": SYSTEM_PROMPT
-        }
-    ]
+    try:
 
-# Mostrar conversa
-for msg in st.session_state.messages:
-    if msg["role"] != "system":
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+        cliente = genai.Client(api_key=api_key)
 
-# Entrada do usuário
-pergunta = st.chat_input("Digite sua mensagem...")
+        pergunta = st.chat_input("Digite sua mensagem...")
 
-if pergunta:
+        if pergunta:
 
-    st.session_state.messages.append(
-        {
-            "role": "user",
-            "content": pergunta
-        }
-    )
+            with st.chat_message("user"):
+                st.write(pergunta)
 
-    with st.chat_message("user"):
-        st.markdown(pergunta)
-
-    if api_key:
-
-        try:
-
-            cliente = OpenAI(
-                api_key=api_key,
-                base_url=OPENROUTER_URL
-            )
-
-            resposta = cliente.chat.completions.create(
-                model=modelo,
-                messages=st.session_state.messages
-            )
-
-            texto = resposta.choices[0].message.content
-
-            st.session_state.messages.append(
-                {
-                    "role": "assistant",
-                    "content": texto
-                }
+            resposta = cliente.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=pergunta
             )
 
             with st.chat_message("assistant"):
-                st.markdown(texto)
+                st.write(resposta.text)
 
-        except Exception as erro:
-            st.error(f"Erro: {erro}")
+    except Exception as e:
+        st.error(f"Erro: {e}")
 
-    else:
-        st.warning("Digite sua chave da OpenRouter.")
+else:
+    st.info("Digite sua chave da API Gemini na barra lateral.")
