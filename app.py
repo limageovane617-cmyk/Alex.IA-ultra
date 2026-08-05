@@ -25,8 +25,14 @@ if api_key:
     try:
         # Conecta ao Gemini
         cliente = genai.Client(api_key=api_key)
-
+        
         st.success("✅ Gemini conectado com sucesso!")
+
+        st.sidebar.header("⚙️ Ferramentas")
+
+        if st.sidebar.button("🗑️ Limpar conversa"):
+            st.session_state.mensagens = []
+            st.rerun()
 
         st.sidebar.header("🎭 Personagem")
 
