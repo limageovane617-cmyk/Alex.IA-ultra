@@ -19,14 +19,14 @@ api_key = st.sidebar.text_input(
     type="password"
 )
 
-# Seletor de Modelos Dinâmico
+# Seletor de Modelos Dinâmico (Colocando o Llama 3 como padrão por estabilidade)
 modelo_selecionado = st.sidebar.selectbox(
     "Escolha o cérebro da IA:",
     options=[
-        "openrouter/free", 
         "meta-llama/llama-3-8b-instruct:free", 
         "mistralai/mistral-7b-instruct:free",
-        "google/gemma-2-9b-it:free"
+        "google/gemma-2-9b-it:free",
+        "openrouter/free"
     ],
     index=0,
     help="Selecione o modelo de IA que processará suas mensagens."
@@ -107,17 +107,15 @@ if pergunta:
         # Alinha o histórico do chat acumulado
         mensagens_api.extend(st.session_state.mensagens)
 
-        # Resposta da IA via HTTP Direto (Evita o bloqueio de código HTML)
+        # Resposta da IA via HTTP Direto protegida
         with st.chat_message("assistant"):
             with st.spinner("Pensando..."):
                 try:
-                    # Cabeçalhos manuais simulando um navegador real para passar pelo bloqueio
                     headers = {
                         "Authorization": f"Bearer {api_key}",
                         "Content-Type": "application/json",
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                        "HTTP-Referer": "http://localhost:8501",
-                        "X-Title": "Alex IA Ultra"
+                        "HTTP-Referer": "https://streamlit.io",
+                        "X-Title": "Alex IA Ultra App"
                     }
                     
                     payload = {
@@ -125,28 +123,26 @@ if pergunta:
                         "messages": mensagens_api
                     }
 
-                    # Faz a requisição POST direto no endpoint da OpenRouter
+                    # Faz a requisição POST
                     response = requests.post(
                         "https://openrouter.ai",
                         headers=headers,
                         json=payload
                     )
 
-                    # Verifica se deu algum erro HTTP de autenticação ou limites
                     if response.status_code == 200:
-                        dados = response.json()
-                        texto_resposta = dados["choices"][0]["message"]["content"]
-                        
-                        # Mostra o texto finalizado na tela
-                        st.write(texto_resposta)
-
-                        # Salva a resposta gerada no histórico do session_state
-                        st.session_state.mensagens.append({"role": "assistant", "content": texto_resposta})
+                        try:
+                            dados = response.json()
+                            texto_resposta = dados["choices"][0]["message"]["content"]
+                            
+                            st.write(texto_resposta)
+                            st.session_state.mensagens.append({"role": "assistant", "content": texto_resposta})
+                        except Exception:
+                            st.error("⚠️ O OpenRouter enviou uma resposta inválida. Tente mudar o cérebro da IA na barra lateral.")
                     elif response.status_code == 401:
-                        st.error("❌ Erro 401: Chave de API inválida ou incorreta. Verifique suas configurações na barra lateral.")
+                        st.error("❌ Chave de API inválida! Verifique se copiou a chave do OpenRouter corretamente.")
                     else:
-                        st.error(f"❌ Erro do OpenRouter (Código {response.status_code}): {response.text[:200]}")
+                        st.error(f"❌ Erro do OpenRouter ({response.status_code}): O modelo selecionado pode estar fora do ar. Mude o cérebro da IA na barra lateral.")
                 
                 except Exception as api_error:
-                    st.error(f"Erro ao processar requisição: {api_error}")
-                    
+                    st.error(f"Erro ao conectar com o servidor: {api_error}")
