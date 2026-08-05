@@ -61,8 +61,8 @@ if api_key:
         if pergunta:
 
             resposta = cliente.models.generate_content(
-    model="gemini-3.1-flash-lite",
-    contents=f"""
+              model="gemini-3.1-flash-lite",
+              contents=f"""
 Você é o Alex IA, uma inteligência artificial avançada.
 
 Seu objetivo é ajudar o usuário criando:
