@@ -70,8 +70,8 @@ if api_key:
 
         if lista_personagens:
             personagem_escolhido = st.sidebar.selectbox(
-                 "Escolha um personagem",
-                 [p[0] for p in lista_personagens]
+                      "Escolha um personagem",
+                      [p[0] for p in lista_personagens]
              )
 
         nome_personagem = st.sidebar.text_input("Nome")
