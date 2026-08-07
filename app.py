@@ -168,9 +168,14 @@ if api_key:
 
         if pergunta:
 
-            contexto_personagem = ""
+           st.session_state.mensagens.append({
+               "role": "user",
+               "content": pergunta
+           })
 
-            if nome_personagem.strip():
+           contexto_personagem = ""
+
+           if nome_personagem.strip():
                 contexto_personagem = f"""
 Existe um personagem criado pelo usuário:
 
