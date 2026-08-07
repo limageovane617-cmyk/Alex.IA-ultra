@@ -168,55 +168,44 @@ if api_key:
                 st.sidebar.success("✅ Personagem salvo!")
 
         # Campo da pergunta
-        pergunta = st.chat_input("Digite sua mensagem...")
+   if pergunta:
 
-        if pergunta:
-            if modo == "🎭 Personagem":
-                contexto_personagem = f"""
-Personagem principal:
+      contexto_personagem = ""
 
-Nome: {nome_personagem}
+      if nome_personagem.strip():
+           contexto_personagem = f"""
+    Ex.iste um personagem criado pelo usuário:
 
-Idade: {idade_personagem}
+    Nome: {nome_personagem}
+    Idade: {idade_personagem}
+    Aparência: {aparencia_personagem}
+    Roupa: {roupa_personagem}
+    Personalidade: {personalidade_personagem}
 
-Aparência: {aparencia_personagem}
+    Use esse personagem somente quando o usuário pedir.
+    """
 
-Roupa: {roupa_personagem}
+        resposta = cliente.models.generate_content(
+            model="gemini-3.1-flash-lite",
+            contents=f"""
+    Você é o Alex IA, uma inteligência artificial avançada.
 
-Personalidade: {personalidade_personagem}
-"""
-            else:
-                contexto_personagem = ""
+    Converse naturalmente com o usuário.
 
-            resposta = cliente.models.generate_content(
-                model="gemini-3.1-flash-lite",
-                contents=f"""
-Você é o Alex IA, uma inteligência artificial avançada.
+    Regras:
 
-Modo atual:
-{modo}
+    - Entenda o contexto da conversa.
+    - Se o usuário pedir um personagem, crie ou interprete esse personagem.
+    - Se o usuário não pedir personagem, responda normalmente como Alex IA.
+    - Sempre responda em português do Brasil.
+    - Seja criativo, organizado e ajude Geovani em seus projetos.
 
-Regras:
+    {contexto_personagem}
 
-Se o modo for "🤖 IA normal":
-- Responda normalmente ao usuário.
-- Não peça informações de personagem.
-- Não crie personagem automaticamente.
-
-Se o modo for "🎭 Personagem":
-- Use os dados do personagem salvo.
-- Crie histórias, cenas e roteiros usando o personagem.
-
-Você sempre responde em português do Brasil.
-
-Seja criativo, organizado e ajude Geovani a desenvolver seus projetos.
-
-{contexto_personagem}
-
-Pergunta do usuário:
-{pergunta}
-"""
-            )
+    Pergunta do usuário:
+    {pergunta}
+    """
+        )
 
             st.subheader("🤖 Alex IA respondeu:")
             st.write(resposta.text)
