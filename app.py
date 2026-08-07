@@ -65,30 +65,30 @@ if api_key:
         st.sidebar.header("🎭 Personagem")
         st.sidebar.subheader("📚 Personagens salvos")
 
-        cursor.execute("SELECT nome FROM personagens ORDER BY nome")
+            cursor.execute("SELECT nome FROM personagens ORDER BY nome")
         lista_personagens = cursor.fetchall()
 
-if lista_personagens:
-    personagem_escolhido = st.sidebar.selectbox(
-      "Escolha um personagem",
-      [p[0] for p in lista_personagens]
-   )
+         if lista_personagens:
+            personagem_escolhido = st.sidebar.selectbox(
+                "Escolha um personagem",
+                [p[0] for p in lista_personagens]
+            )
 
-    if personagem_escolhido:
-        cursor.execute("""
-        SELECT idade, aparencia, roupa, personalidade
-        FROM personagens
-        WHERE nome = ?
-        """, (personagem_escolhido,))
+            if personagem_escolhido:
+                cursor.execute("""
+                SELECT idade, aparencia, roupa, personalidade
+                FROM personagens
+                WHERE nome = ?
+                """, (personagem_escolhido,))
 
-        dados = cursor.fetchone()
+                dados = cursor.fetchone()
 
-        if dados:
-            nome_personagem = personagem_escolhido
-            idade_personagem = dados[0]
-            aparencia_personagem = dados[1]
-            roupa_personagem = dados[2]
-            personalidade_personagem = dados[3]
+                if dados:
+                    nome_personagem = personagem_escolhido
+                    idade_personagem = dados[0]
+                    aparencia_personagem = dados[1]
+                    roupa_personagem = dados[2]
+                    personalidade_personagem = dados[3]
 
         nome_personagem = st.sidebar.text_input("Nome")
         idade_personagem = st.sidebar.text_input("Idade")
