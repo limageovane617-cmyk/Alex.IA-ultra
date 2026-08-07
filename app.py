@@ -2,6 +2,7 @@ import streamlit as st
 from google import genai
 import json
 import sqlite3
+from config import SYSTEM_PROMPT
 
 
 # Configuração da página
