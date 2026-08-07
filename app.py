@@ -186,7 +186,7 @@ Use esse personagem somente quando o usuário pedir.
             resposta = cliente.models.generate_content(
                 model="gemini-3.1-flash-lite",
                 contents=f"""
-Você é o Alex IA, uma inteligência artificial avançada.
+                {SYSTEM_PROMPT}
 
 Converse naturalmente com o usuário.
 
