@@ -65,11 +65,6 @@ if api_key:
         # Barra lateral
         st.sidebar.header("⚙️ Ferramentas")
 
-        modo = st.sidebar.radio(
-            "Escolha o modo:",
-            ["🤖 IA normal", "🎭 Personagem"]
-        )
-
         if st.sidebar.button("🗑️ Limpar conversa"):
             st.session_state.mensagens = []
             st.rerun()
