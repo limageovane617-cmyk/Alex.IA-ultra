@@ -45,6 +45,14 @@ CREATE TABLE IF NOT EXISTS personagens (
 """)
 
 conn.commit()
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS memoria (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    informacao TEXT NOT NULL
+)
+""")
+
+conn.commit()
 
 
 # Personagens salvos em JSON
