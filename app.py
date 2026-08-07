@@ -168,47 +168,50 @@ if api_key:
                 st.sidebar.success("✅ Personagem salvo!")
 
         # Campo da pergunta
-   if pergunta:
+        pergunta = st.chat_input("Digite sua mensagem...")
 
-      contexto_personagem = ""
+        if pergunta:
 
-      if nome_personagem.strip():
-           contexto_personagem = f"""
-    Ex.iste um personagem criado pelo usuário:
+            contexto_personagem = ""
 
-    Nome: {nome_personagem}
-    Idade: {idade_personagem}
-    Aparência: {aparencia_personagem}
-    Roupa: {roupa_personagem}
-    Personalidade: {personalidade_personagem}
+            if nome_personagem.strip():
+                contexto_personagem = f"""
+Existe um personagem criado pelo usuário:
 
-    Use esse personagem somente quando o usuário pedir.
-    """
+Nome: {nome_personagem}
+Idade: {idade_personagem}
+Aparência: {aparencia_personagem}
+Roupa: {roupa_personagem}
+Personalidade: {personalidade_personagem}
 
-        resposta = cliente.models.generate_content(
-            model="gemini-3.1-flash-lite",
-            contents=f"""
-    Você é o Alex IA, uma inteligência artificial avançada.
+Use esse personagem somente quando o usuário pedir.
+"""
 
-    Converse naturalmente com o usuário.
+            resposta = cliente.models.generate_content(
+                model="gemini-3.1-flash-lite",
+                contents=f"""
+Você é o Alex IA, uma inteligência artificial avançada.
 
-    Regras:
+Converse naturalmente com o usuário.
 
-    - Entenda o contexto da conversa.
-    - Se o usuário pedir um personagem, crie ou interprete esse personagem.
-    - Se o usuário não pedir personagem, responda normalmente como Alex IA.
-    - Sempre responda em português do Brasil.
-    - Seja criativo, organizado e ajude Geovani em seus projetos.
+Regras:
 
-    {contexto_personagem}
+- Entenda o contexto da conversa.
+- Se o usuário pedir um personagem, crie ou interprete esse personagem.
+- Se o usuário não pedir personagem, responda normalmente como Alex IA.
+- Sempre responda em português do Brasil.
+- Seja criativo, organizado e ajude Geovani em seus projetos.
 
-    Pergunta do usuário:
-    {pergunta}
-    """
-        )
+{contexto_personagem}
+
+Pergunta do usuário:
+{pergunta}
+"""
+            )
 
             st.subheader("🤖 Alex IA respondeu:")
             st.write(resposta.text)
+    
 
     except Exception as e:
         st.error(f"Erro: {e}")
