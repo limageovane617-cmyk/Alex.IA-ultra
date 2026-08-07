@@ -162,21 +162,21 @@ if api_key:
 
                 conn.commit()
                 st.sidebar.success("✅ Personagem salvo!")
+                
+                # Campo da pergunta
+                pergunta = st.chat_input("Digite sua mensagem...")
 
-        # Campo da pergunta
-        pergunta = st.chat_input("Digite sua mensagem...")
+                if pergunta:
 
-        if pergunta:
+                   st.session_state.mensagens.append({
+                      "role": "user",
+                      "content": pergunta
+                   })
 
-           st.session_state.mensagens.append({
-               "role": "user",
-               "content": pergunta
-           })
+                   contexto_personagem = ""
 
-           contexto_personagem = ""
-
-           if nome_personagem.strip():
-                contexto_personagem = f"""
+                   if nome_personagem.strip():
+                      contexto_personagem = f"""
 Existe um personagem criado pelo usuário:
 
 Nome: {nome_personagem}
@@ -191,7 +191,7 @@ Use esse personagem somente quando o usuário pedir.
             resposta = cliente.models.generate_content(
                 model="gemini-3.1-flash-lite",
                 contents=f"""
-                {SYSTEM_PROMPT}
+{SYSTEM_PROMPT}
 
 Converse naturalmente com o usuário.
 
@@ -212,6 +212,8 @@ Pergunta do usuário:
 
             st.subheader("🤖 Alex IA respondeu:")
             st.write(resposta.text)
+
+
     
 
     except Exception as e:
