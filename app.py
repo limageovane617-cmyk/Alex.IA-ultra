@@ -68,11 +68,11 @@ if api_key:
         cursor.execute("SELECT nome FROM personagens ORDER BY nome")
         lista_personagens = cursor.fetchall()
 
-        if lista_personagens:
+if lista_personagens:
     personagem_escolhido = st.sidebar.selectbox(
-        "Escolha um personagem",
-        [p[0] for p in lista_personagens]
-    )
+      "Escolha um personagem",
+      [p[0] for p in lista_personagens]
+   )
 
     if personagem_escolhido:
         cursor.execute("""
