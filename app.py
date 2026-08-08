@@ -3,6 +3,7 @@ from google import genai
 import json
 import sqlite3
 from config import SYSTEM_PROMPT
+from huggingface_hub import InferenceClient
 
 
 # Configuração da página
