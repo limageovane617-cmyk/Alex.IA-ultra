@@ -51,8 +51,14 @@ from arquivos import (
 
 from codigo import (
     preparar_pedido_codigo,
-    analisar_codigo,
     listar_linguagens
+)
+
+from Internet import (
+    configurar_pesquisa_google,
+    preparar_pesquisa,
+    extrair_fontes,
+    pesquisa_disponivel
 )
 
 
@@ -165,6 +171,13 @@ if cliente is None:
     )
 
     st.stop()
+
+
+# ============================================================
+# 🌐 CONFIGURAÇÃO DA INTERNET
+# ============================================================
+
+pesquisa_google = configurar_pesquisa_google()
 
 
 # ============================================================
@@ -466,6 +479,28 @@ with st.sidebar:
 
 
     # ========================================================
+    # 🌐 INTERNET
+    # ========================================================
+
+    st.header("🌐 Internet")
+
+    if pesquisa_disponivel():
+
+        st.success(
+            "Google Search conectado"
+        )
+
+    else:
+
+        st.warning(
+            "Pesquisa na internet indisponível"
+        )
+
+
+    st.divider()
+
+
+    # ========================================================
     # 🖼️ IMAGEM
     # ========================================================
 
@@ -759,7 +794,11 @@ if pergunta:
                     contents=prompt_codigo
                 )
 
-                resposta_codigo = resposta.text
+                resposta_codigo = (
+                    resposta.text
+                    if resposta.text
+                    else "Não consegui gerar o código."
+                )
 
             except Exception as erro:
 
@@ -873,6 +912,15 @@ Memórias importantes do usuário:
 
 
     # --------------------------------------------------------
+    # 🌐 INSTRUÇÃO PARA PESQUISA
+    # --------------------------------------------------------
+
+    instrucao_pesquisa = preparar_pesquisa(
+        pergunta
+    )
+
+
+    # --------------------------------------------------------
     # 🧠 INSTRUÇÃO FINAL
     # --------------------------------------------------------
 
@@ -891,12 +939,20 @@ Regras adicionais:
 - Seja clara, inteligente e objetiva.
 - Ajude Geovani a desenvolver a Alex IA Ultra.
 - Quando não souber algo, diga claramente.
+- Quando a pergunta depender de informação atual,
+  utilize a pesquisa Google disponível.
+- Quando pesquisar na internet, priorize fontes
+  confiáveis e recentes.
+- Não diga que pesquisou na internet se não tiver
+  realmente utilizado a ferramenta de pesquisa.
 
 {contexto_memoria}
 
 {contexto_personagem}
 
 {contexto_arquivo}
+
+{instrucao_pesquisa}
 
 Histórico da conversa:
 
@@ -908,69 +964,4 @@ Pergunta atual:
 """
 
 
-    # --------------------------------------------------------
-    # 🤖 GEMINI
-    # --------------------------------------------------------
-
-    try:
-
-        with st.chat_message("assistant"):
-
-            with st.spinner(
-                "🤖 Alex IA está pensando..."
-            ):
-
-                resposta = cliente.models.generate_content(
-                    model=GEMINI_MODEL,
-                    contents=instrucao
-                )
-
-
-                texto_resposta = (
-                    resposta.text
-                    if resposta.text
-                    else "Não consegui gerar uma resposta."
-                )
-
-
-            st.write(
-                texto_resposta
-            )
-
-
-            # ------------------------------------------------
-            # 🔊 VOZ
-            # ------------------------------------------------
-
-            if usar_voz:
-
-                with st.spinner(
-                    "🔊 Gerando voz..."
-                ):
-
-                    mostrar_audio(
-                        texto_resposta
-                    )
-
-
-        st.session_state.mensagens.append({
-            "role": "assistant",
-            "content": texto_resposta
-        })
-
-
-    except Exception as erro:
-
-        mensagem_erro = (
-            f"❌ Erro ao conversar com o Gemini:\n\n"
-            f"{erro}"
-        )
-        st.session_state.mensagens.append({
-            "role": "assistant",
-            "content": mensagem_erro
-        })
-
-        st.error(mensagem_erro)
-
-
-  
+ 
