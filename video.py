@@ -914,4 +914,75 @@ def mostrar_gerador_video():
                         continuar_video(
                             descricao_continuacao
                         )
-               
+                    )
+
+                if caminho:
+
+                    st.success(
+                        mensagem
+                    )
+
+                    st.video(
+                        caminho
+                    )
+
+                else:
+
+                    st.error(
+                        mensagem
+                    )
+
+        else:
+
+            st.warning(
+                "⚠️ O limite aproximado de "
+                "extensão desta sequência foi alcançado."
+            )
+
+        # ====================================================
+        # 🆕 NOVO VÍDEO
+        # ====================================================
+
+        if st.button(
+            "🆕 Começar novo vídeo",
+            key="novo_video_ultra",
+        ):
+
+            resetar_video()
+
+            st.rerun()
+
+
+# ============================================================
+# ▶️ EXECUÇÃO DIRETA DO MÓDULO
+# ============================================================
+
+if __name__ == "__main__":
+
+    st.set_page_config(
+        page_title="Alex IA Ultra — Vídeo",
+        page_icon="🎬",
+        layout="wide",
+    )
+
+    st.title(
+        "🤖 Alex IA Ultra"
+    )
+
+    st.caption(
+        "🎬 Sistema de geração de vídeo cinematográfico"
+    )
+
+    mostrar_gerador_video()
+
+
+
+
+
+
+
+
+
+
+
+                            
