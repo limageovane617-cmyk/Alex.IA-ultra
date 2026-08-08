@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS memoria (
 """)
 
 conn.commit()
+
 # Função para salvar memória
 def salvar_memoria(informacao):
     cursor.execute(
@@ -60,6 +61,15 @@ def salvar_memoria(informacao):
         (informacao,)
     )
     conn.commit()
+    
+# Função para carregar memórias
+def carregar_memorias():
+    cursor.execute(
+        "SELECT informacao FROM memoria ORDER BY id"
+    )
+    resultados = cursor.fetchall()
+
+    return [item[0] for item in resultados]
 
 
 # Personagens salvos em JSON
