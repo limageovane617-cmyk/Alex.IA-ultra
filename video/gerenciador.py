@@ -4,6 +4,7 @@
 # ============================================================
 
 from .configuracao import (
+    MOTORES_VIDEO,
     CAMERAS,
     PROPORCOES,
     DURACAO_PADRAO,
@@ -13,47 +14,42 @@ from .motores.registro import (
     obter_motores,
     listar_motores as listar_motores_registrados,
     buscar_motor,
-    primeiro_motor_disponivel,
-    status_motores as status_motores_registrados,
 )
 
 
-# ============================================================
-# 🎬 MOTORES
-# ============================================================
-
 def listar_motores():
-    """Retorna os nomes dos motores realmente registrados."""
+    """Retorna os motores registrados na Alex IA Ultra."""
+
     return listar_motores_registrados()
 
 
 def escolher_motor(preferido=None):
     """
-    Escolhe um motor registrado.
+    Escolhe automaticamente um motor de vídeo.
 
-    Se o usuário indicar um motor existente,
+    Se um motor específico for informado e estiver registrado,
     ele será utilizado.
 
-    Caso contrário, a Ultra procura automaticamente
-    o primeiro motor disponível.
+    Caso contrário, o sistema procura um motor disponível.
     """
+
+    motores = obter_motores()
+
+    if not motores:
+        return None
 
     if preferido:
         motor = buscar_motor(preferido)
 
-        if motor is not None and getattr(
-            motor,
-            "disponivel",
-            False
-        ):
+        if motor is not None:
             return motor
 
-    return primeiro_motor_disponivel()
+    for motor in motores:
+        if getattr(motor, "disponivel", False):
+            return motor
 
+    return None
 
-# ============================================================
-# ⚙️ CONFIGURAÇÃO
-# ============================================================
 
 def validar_configuracao(
     camera,
@@ -79,10 +75,6 @@ def validar_configuracao(
     return camera, proporcao, duracao
 
 
-# ============================================================
-# 🎬 PREPARAÇÃO DO VÍDEO
-# ============================================================
-
 def preparar_video(
     descricao,
     camera=None,
@@ -93,8 +85,8 @@ def preparar_video(
     """
     Prepara uma solicitação de vídeo.
 
-    O gerenciador escolhe um motor registrado e
-    organiza todas as configurações necessárias.
+    Nesta etapa o sistema organiza o pedido e
+    seleciona o motor registrado.
     """
 
     if not descricao or not descricao.strip():
@@ -112,10 +104,8 @@ def preparar_video(
 
     motor_escolhido = escolher_motor(motor)
 
-    if motor_escolhido is None:
-        return None, (
-            "Nenhum motor de vídeo está disponível."
-        )
+    if not motor_escolhido:
+        return None, "Nenhum motor de vídeo está disponível."
 
     pedido = {
         "descricao": descricao.strip(),
@@ -128,96 +118,25 @@ def preparar_video(
     return pedido, None
 
 
-# ============================================================
-# 🎬 GERAÇÃO
-# ============================================================
-
-def gerar_com_motor(
-    descricao,
-    camera=None,
-    proporcao=None,
-    duracao=None,
-    motor=None,
-    imagem=None,
-):
-    """
-    Envia o pedido para o motor escolhido.
-
-    Nesta etapa o motor Wan prepara a solicitação.
-    A conexão real com o serviço de geração será
-    adicionada separadamente.
-    """
-
-    pedido, erro = preparar_video(
-        descricao=descricao,
-        camera=camera,
-        proporcao=proporcao,
-        duracao=duracao,
-        motor=motor,
-    )
-
-    if erro:
-        return None, erro
-
-    motor_objeto = buscar_motor(
-        pedido["motor"]
-    )
-
-    if motor_objeto is None:
-        return None, (
-            f"O motor '{pedido['motor']}' "
-            "não foi encontrado."
-        )
-
-    try:
-        resultado = motor_objeto.gerar(
-            prompt=pedido["descricao"],
-            imagem=imagem,
-            camera=pedido["camera"],
-            proporcao=pedido["proporcao"],
-            duracao=pedido["duracao"],
-        )
-
-        return resultado, None
-
-    except Exception as erro_motor:
-        return None, (
-            f"Erro no motor {pedido['motor']}: "
-            f"{erro_motor}"
-        )
-
-
-# ============================================================
-# 📊 STATUS DOS MOTORES
-# ============================================================
-
 def status_motores():
-    """Retorna o status dos motores registrados."""
-
-    return status_motores_registrados()
-
-
-# ============================================================
-# 🧪 TESTE DO SISTEMA
-# ============================================================
-
-def testar_gerenciador():
     """
-    Faz um teste simples da central de motores.
-    Não gera vídeo real.
+    Retorna o estado dos motores registrados.
     """
 
     motores = obter_motores()
 
-    if not motores:
-        return False, "Nenhum motor registrado."
-
-    motor = primeiro_motor_disponivel()
-
-    if motor is None:
-        return False, "Nenhum motor está disponível."
-
-    return True, (
-        f"Gerenciador funcionando. "
-        f"Motor selecionado: {motor.nome}"
-    )
+    return {
+        motor.nome: {
+            "disponivel": getattr(
+                motor,
+                "disponivel",
+                False,
+            ),
+            "status": (
+                "pronto"
+                if getattr(motor, "disponivel", False)
+                else "indisponível"
+            ),
+        }
+        for motor in motores
+    }
