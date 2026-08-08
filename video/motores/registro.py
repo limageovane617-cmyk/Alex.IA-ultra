@@ -9,7 +9,7 @@ from .wan import WanMotor
 def obter_motores():
     """
     Cria e retorna todos os motores de vídeo
-    atualmente cadastrados na Ultra.
+    atualmente registrados na Ultra.
     """
 
     return [
@@ -19,12 +19,15 @@ def obter_motores():
 
 def listar_motores():
     """
-    Retorna somente os nomes dos motores cadastrados.
+    Retorna somente os nomes dos motores registrados.
     """
 
     motores = obter_motores()
 
-    return [motor.nome for motor in motores]
+    return [
+        motor.nome
+        for motor in motores
+    ]
 
 
 def buscar_motor(nome):
@@ -37,60 +40,71 @@ def buscar_motor(nome):
     if not nome:
         return None
 
-    nome = nome.strip().lower()
+    nome = str(nome).strip().lower()
 
     for motor in obter_motores():
-        if motor.nome.lower() == nome:
+
+        nome_motor = getattr(
+            motor,
+            "nome",
+            "",
+        )
+
+        if nome_motor.lower() == nome:
             return motor
 
     return None
 
 
-def primeiro_motor_disponivel():
+def motor_disponivel(nome):
     """
-    Retorna o primeiro motor disponível.
+    Verifica se determinado motor está disponível.
     """
 
-    for motor in obter_motores():
-        if getattr(motor, "disponivel", False):
-            return motor
+    motor = buscar_motor(nome)
 
-    return None
+    if motor is None:
+        return False
+
+    return bool(
+        getattr(
+            motor,
+            "disponivel",
+            False,
+        )
+    )
 
 
 def status_motores():
     """
-    Retorna o estado atual de todos os motores.
+    Retorna o status de todos os motores registrados.
     """
 
-    resultado = []
+    resultado = {}
 
     for motor in obter_motores():
-        resultado.append(
-            {
-                "nome": motor.nome,
-                "disponivel": getattr(
-                    motor,
-                    "disponivel",
-                    False
-                ),
-            }
+
+        nome = getattr(
+            motor,
+            "nome",
+            "Desconhecido",
         )
 
+        disponivel = bool(
+            getattr(
+                motor,
+                "disponivel",
+                False,
+            )
+        )
+
+        resultado[nome] = {
+            "disponivel": disponivel,
+            "status": (
+                "pronto"
+                if disponivel
+                else "indisponível"
+            ),
+        }
+
     return resultado
-
-
-if __name__ == "__main__":
-    print("🎬 ALEX IA ULTRA — REGISTRO DE MOTORES")
-    print()
-
-    print("Motores cadastrados:")
-    for nome in listar_motores():
-        print(f"  • {nome}")
-
-    print()
-    print("Status:")
-
-    for item in status_motores():
-        estado = "OK" if item["disponivel"] else "INDISPONÍVEL"
-        print(f"  • {item['nome']}: {estado}")
