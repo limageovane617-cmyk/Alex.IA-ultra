@@ -21,16 +21,19 @@ st.caption(
 
 
 # Memória da conversa
+
 if "mensagens" not in st.session_state:
     st.session_state.mensagens = []
 
 
 # Personagem atual
+
 if "personagem" not in st.session_state:
     st.session_state.personagem = {}
 
 
 # Banco de dados
+
 conn = sqlite3.connect("alexia.db")
 cursor = conn.cursor()
 
@@ -56,6 +59,7 @@ CREATE TABLE IF NOT EXISTS memoria (
 conn.commit()
 
 # Função para salvar memória
+
 def salvar_memoria(informacao):
     cursor.execute(
         "INSERT INTO memoria (informacao) VALUES (?)",
@@ -64,6 +68,7 @@ def salvar_memoria(informacao):
     conn.commit()
     
 # Função para carregar memórias
+
 def carregar_memorias():
     cursor.execute(
         "SELECT informacao FROM memoria ORDER BY id"
@@ -74,6 +79,7 @@ def carregar_memorias():
 
 
 # Personagens salvos em JSON
+
 try:
     with open("personagens.json", "r", encoding="utf-8") as arquivo:
         personagens_salvos = json.load(arquivo)
@@ -82,6 +88,7 @@ except Exception:
 
 
 # Chave da API
+
 api_key = st.text_input(
     "Olá Geovani, sua chave da API:",
     type="password"
@@ -93,16 +100,19 @@ if api_key:
     try:
 
         # Conecta ao Gemini
+        
         cliente = genai.Client(api_key=api_key)
 
         st.success("✅ Gemini conectado com sucesso!")
 
 
         # Barra lateral
+        
         st.sidebar.header("⚙️ Ferramentas")
 
 
         # Limpar conversa
+        
         if st.sidebar.button("🗑️ Limpar conversa"):
 
             st.session_state.mensagens = []
@@ -111,6 +121,7 @@ if api_key:
 
 
         # Área de personagens
+        
         st.sidebar.header("🎭 Personagem")
         st.sidebar.subheader("📚 Personagens salvos")
 
@@ -123,6 +134,7 @@ if api_key:
 
 
         # Valores padrão
+        
         nome_personagem = ""
         idade_personagem = ""
         aparencia_personagem = ""
@@ -131,6 +143,7 @@ if api_key:
 
 
         # Lista de personagens salvos
+        
         if lista_personagens:
 
             personagem_escolhido = st.sidebar.selectbox(
@@ -160,6 +173,7 @@ if api_key:
 
 
         # Campos do personagem
+        
         nome_personagem = st.sidebar.text_input(
             "Nome",
             value=nome_personagem
@@ -187,6 +201,7 @@ if api_key:
 
 
         # Salvar personagem
+        
         if st.sidebar.button("💾 Salvar personagem"):
 
             if not nome_personagem.strip():
@@ -247,6 +262,7 @@ if api_key:
 
 
         # Campo da pergunta
+        
         pergunta = st.chat_input(
             "Digite sua mensagem..."
         )
@@ -255,11 +271,13 @@ if api_key:
         if pergunta:
 
             # Guarda a mensagem do usuário
+            
             st.session_state.mensagens.append({
                 "role": "user",
                 "content": pergunta
             })
            # Salva memória quando o usuário usar o comando "memorize:"
+            
             if pergunta.lower().startswith("memorize:"):
                 informacao = pergunta[9:].strip()
 
@@ -280,6 +298,7 @@ Memórias importantes sobre o usuário:
 
 
             # Contexto do personagem
+            
             contexto_personagem = ""
 
 
@@ -299,6 +318,7 @@ Use esse personagem somente quando o usuário pedir.
 
 
             # Monta o histórico da conversa
+            
             historico = ""
 
             for mensagem in st.session_state.mensagens:
@@ -317,6 +337,7 @@ Use esse personagem somente quando o usuário pedir.
 
 
             # Envia para o Gemini
+            
             resposta = cliente.models.generate_content(
 
                 model="gemini-3.1-flash-lite",
@@ -353,10 +374,12 @@ Pergunta atual de Geovani:
 
 
             # Texto da resposta
+            
             texto_resposta = resposta.text
 
 
             # Guarda a resposta na memória
+            
             st.session_state.mensagens.append({
                 "role": "assistant",
                 "content": texto_resposta
@@ -364,6 +387,7 @@ Pergunta atual de Geovani:
 
 
             # Mostra resposta
+            
             st.subheader("🤖 Alex IA respondeu:")
 
             st.write(texto_resposta)
