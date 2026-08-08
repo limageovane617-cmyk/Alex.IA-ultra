@@ -53,6 +53,13 @@ CREATE TABLE IF NOT EXISTS memoria (
 """)
 
 conn.commit()
+# Função para salvar memória
+def salvar_memoria(informacao):
+    cursor.execute(
+        "INSERT INTO memoria (informacao) VALUES (?)",
+        (informacao,)
+    )
+    conn.commit()
 
 
 # Personagens salvos em JSON
