@@ -518,6 +518,3 @@ if __name__ == "__main__":
     st.title("🤖 Alex IA Ultra")
     st.caption("🎬 Sistema de geração de vídeo cinematográfico")
     mostrar_gerador_video()
-'''
-Path('/mnt/data/video_revisado.py').write_text(video_py, encoding='utf-8')
-print('OK:', Path('/mnt/data/video_revisado.py').stat().st_size, 'bytes')
