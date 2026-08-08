@@ -290,14 +290,25 @@ if api_key:
 
                 conn.commit()
 
-
                 st.sidebar.success(
                     "✅ Personagem salvo!"
                 )
 
 
-        # Campo da pergunta
+        # 💬 Histórico visual da conversa
+        for mensagem in st.session_state.mensagens:
+
+            if mensagem["role"] == "user":
+                with st.chat_message("user"):
+                    st.write(mensagem["content"])
+
+            elif mensagem["role"] == "assistant":
+                with st.chat_message("assistant"):
+                    st.write(mensagem["content"])
         
+
+
+        # Campo da pergunta
         pergunta = st.chat_input(
             "Digite sua mensagem..."
         )
