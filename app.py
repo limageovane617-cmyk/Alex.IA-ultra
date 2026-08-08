@@ -258,6 +258,12 @@ if api_key:
                 "role": "user",
                 "content": pergunta
             })
+           # Salva memória quando o usuário usar o comando "memorize:"
+            if pergunta.lower().startswith("memorize:"):
+                informacao = pergunta[9:].strip()
+
+                if informacao:
+                    salvar_memoria(informacao)
 
             memorias = carregar_memorias()
 
