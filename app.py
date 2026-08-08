@@ -61,10 +61,26 @@ conn.commit()
 # Função para salvar memória
 
 def salvar_memoria(informacao):
+    informacao = informacao.strip()
+
+    if not informacao:
+        return
+
+    cursor.execute(
+        "SELECT id FROM memoria WHERE informacao = ?",
+        (informacao,)
+    )
+
+    memoria_existente = cursor.fetchone()
+
+    if memoria_existente:
+        return
+
     cursor.execute(
         "INSERT INTO memoria (informacao) VALUES (?)",
         (informacao,)
     )
+
     conn.commit()
     
 # Função para carregar memórias
