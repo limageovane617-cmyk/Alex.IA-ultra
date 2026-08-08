@@ -1,497 +1,970 @@
+# ============================================================
+# 🤖 ALEX IA ULTRA
+# Aplicativo principal
+# Criada por Geovani
+# ============================================================
+
 import streamlit as st
-from google import genai
-import json
-import sqlite3
-from config import SYSTEM_PROMPT
-from huggingface_hub import InferenceClient
+
+from config_ultra import (
+    SYSTEM_PROMPT,
+    GEMINI_MODEL,
+    AI_NAME,
+    CREATOR_NAME
+)
+
+from servicos import (
+    criar_cliente_gemini,
+    verificar_servicos
+)
+
+from memoria import (
+    salvar_memoria,
+    carregar_memorias,
+    apagar_memoria,
+    apagar_todas_memorias
+)
+
+from personagens import (
+    salvar_personagem,
+    carregar_personagem,
+    listar_personagens,
+    apagar_personagem
+)
+
+from imagem import (
+    mostrar_imagem
+)
+
+from voz import (
+    mostrar_audio
+)
+
+from video import (
+    preparar_prompt_video,
+    mostrar_configuracao_video
+)
+
+from arquivos import (
+    ler_arquivo
+)
+
+from codigo import (
+    preparar_pedido_codigo,
+    analisar_codigo,
+    listar_linguagens
+)
 
 
-# Configuração da página
+# ============================================================
+# ⚙️ CONFIGURAÇÃO DA PÁGINA
+# ============================================================
 
 st.set_page_config(
-    page_title="Alex IA",
+    page_title="Alex IA Ultra",
     page_icon="🤖",
     layout="wide"
 )
 
-st.title("🤖 Alex IA")
-st.caption(
-    "Olá Geovani! Eu sou sua inteligência artificial pessoal. "
-    "Estou pronto para criar, escrever, programar e ajudar você no que precisar."
-)
-# 🎨 Estilo do painel de conversa
+
+# ============================================================
+# 🎨 ESTILO
+# ============================================================
+
 st.markdown("""
 <style>
 
 .chat-painel {
-    position: fixed;
-    bottom: 15px;
-    left: 5%;
-    width: 90%;
-    background: rgba(25, 25, 35, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 20px;
-    padding: 12px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
-    z-index: 999;
+    max-width: 1000px;
+    margin: auto;
+}
+
+.titulo-alex {
+    text-align: center;
+    font-size: 42px;
+    font-weight: bold;
+}
+
+.subtitulo-alex {
+    text-align: center;
+    opacity: 0.75;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
 
-# Memória da conversa
+# ============================================================
+# 🤖 CABEÇALHO
+# ============================================================
+
+st.markdown(
+    '<div class="titulo-alex">🤖 Alex IA Ultra</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    f'<div class="subtitulo-alex">'
+    f'Criada por {CREATOR_NAME} • Sua inteligência artificial pessoal'
+    f'</div>',
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# 🧠 ESTADO DA CONVERSA
+# ============================================================
 
 if "mensagens" not in st.session_state:
     st.session_state.mensagens = []
 
 
-# Personagem atual
-
-if "personagem" not in st.session_state:
-    st.session_state.personagem = {}
+if "personagem_atual" not in st.session_state:
+    st.session_state.personagem_atual = None
 
 
-# Banco de dados
+if "arquivo_contexto" not in st.session_state:
+    st.session_state.arquivo_contexto = ""
 
-conn = sqlite3.connect("alexia.db")
-cursor = conn.cursor()
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS personagens (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT UNIQUE,
-    idade TEXT,
-    aparencia TEXT,
-    roupa TEXT,
-    personalidade TEXT
-)
-""")
+if "arquivo_nome" not in st.session_state:
+    st.session_state.arquivo_nome = ""
 
-conn.commit()
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS memoria (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    informacao TEXT NOT NULL
-)
-""")
 
-conn.commit()
+# ============================================================
+# 🔐 VERIFICAÇÃO DOS SERVIÇOS
+# ============================================================
 
-# Função para salvar memória
+servicos = verificar_servicos()
 
-def salvar_memoria(informacao):
-    informacao = informacao.strip()
+gemini_disponivel = servicos["gemini"]
+huggingface_disponivel = servicos["huggingface"]
 
-    if not informacao:
-        return
 
-    cursor.execute(
-        "SELECT id FROM memoria WHERE informacao = ?",
-        (informacao,)
+if not gemini_disponivel:
+
+    st.error(
+        "🔐 A chave GEMINI_API_KEY não está configurada "
+        "nos Secrets do Streamlit."
     )
 
-    memoria_existente = cursor.fetchone()
-
-    if memoria_existente:
-        return
-
-    cursor.execute(
-        "INSERT INTO memoria (informacao) VALUES (?)",
-        (informacao,)
+    st.info(
+        "Abra os Secrets do seu aplicativo e adicione "
+        "GEMINI_API_KEY. Não coloque a chave dentro do app.py."
     )
 
-    conn.commit()
-    
-# Função para carregar memórias
+    st.stop()
 
-def carregar_memorias():
-    cursor.execute(
-        "SELECT informacao FROM memoria ORDER BY id"
+
+cliente = criar_cliente_gemini()
+
+if cliente is None:
+
+    st.error(
+        "❌ Não foi possível criar a conexão com o Gemini."
     )
-    resultados = cursor.fetchall()
 
-    return [item[0] for item in resultados]
-
-
-# Personagens salvos em JSON
-
-try:
-    with open("personagens.json", "r", encoding="utf-8") as arquivo:
-        personagens_salvos = json.load(arquivo)
-except Exception:
-    personagens_salvos = {}
+    st.stop()
 
 
-# Chave da API
+# ============================================================
+# 📚 SIDEBAR
+# ============================================================
 
-api_key = st.text_input(
-    "Olá Geovani, sua chave da API:",
-    type="password"
-)
+with st.sidebar:
 
+    st.header("⚙️ Alex IA Ultra")
 
-if api_key:
-
-    try:
-
-        # Conecta ao Gemini
-        
-        cliente = genai.Client(api_key=api_key)
-
-        st.success("✅ Gemini conectado com sucesso!")
+    st.caption(
+        "Painel de controle"
+    )
 
 
-        # Barra lateral
-        
-        st.sidebar.header("⚙️ Ferramentas")
+    # ========================================================
+    # 🧹 LIMPAR CONVERSA
+    # ========================================================
+
+    if st.button(
+        "🗑️ Limpar conversa",
+        use_container_width=True
+    ):
+
+        st.session_state.mensagens = []
+
+        st.rerun()
 
 
-        # Limpar conversa
-        
-        if st.sidebar.button("🗑️ Limpar conversa"):
+    st.divider()
 
-            st.session_state.mensagens = []
+
+    # ========================================================
+    # 🎭 PERSONAGENS
+    # ========================================================
+
+    st.header("🎭 Personagens")
+
+    personagens = listar_personagens()
+
+
+    personagem_selecionado = st.selectbox(
+        "Personagem salvo",
+        ["Nenhum"] + personagens
+    )
+
+
+    dados_personagem = None
+
+
+    if personagem_selecionado != "Nenhum":
+
+        dados_personagem = carregar_personagem(
+            personagem_selecionado
+        )
+
+        if dados_personagem:
+
+            st.session_state.personagem_atual = (
+                dados_personagem
+            )
+
+
+    nome_personagem = st.text_input(
+        "Nome",
+        value=(
+            dados_personagem["nome"]
+            if dados_personagem
+            else ""
+        )
+    )
+
+
+    idade_personagem = st.text_input(
+        "Idade",
+        value=(
+            dados_personagem["idade"]
+            if dados_personagem
+            else ""
+        )
+    )
+
+
+    aparencia_personagem = st.text_area(
+        "Aparência",
+        value=(
+            dados_personagem["aparencia"]
+            if dados_personagem
+            else ""
+        )
+    )
+
+
+    roupa_personagem = st.text_input(
+        "Roupa",
+        value=(
+            dados_personagem["roupa"]
+            if dados_personagem
+            else ""
+        )
+    )
+
+
+    personalidade_personagem = st.text_area(
+        "Personalidade",
+        value=(
+            dados_personagem["personalidade"]
+            if dados_personagem
+            else ""
+        )
+    )
+
+
+    if st.button(
+        "💾 Salvar personagem",
+        use_container_width=True
+    ):
+
+        if not nome_personagem.strip():
+
+            st.warning(
+                "Digite um nome para o personagem."
+            )
+
+        else:
+
+            salvar_personagem(
+                nome=nome_personagem,
+                idade=idade_personagem,
+                aparencia=aparencia_personagem,
+                roupa=roupa_personagem,
+                personalidade=personalidade_personagem
+            )
+
+            st.session_state.personagem_atual = {
+                "nome": nome_personagem,
+                "idade": idade_personagem,
+                "aparencia": aparencia_personagem,
+                "roupa": roupa_personagem,
+                "personalidade": personalidade_personagem
+            }
+
+            st.success(
+                "✅ Personagem salvo!"
+            )
 
             st.rerun()
 
 
-        # Área de personagens
-        
-        st.sidebar.header("🎭 Personagem")
-        st.sidebar.subheader("📚 Personagens salvos")
+    if personagens:
 
-
-        cursor.execute(
-            "SELECT nome FROM personagens ORDER BY nome"
+        personagem_para_apagar = st.selectbox(
+            "Apagar personagem",
+            ["Nenhum"] + personagens,
+            key="apagar_personagem"
         )
 
-        lista_personagens = cursor.fetchall()
+
+        if st.button(
+            "🗑️ Apagar personagem",
+            use_container_width=True
+        ):
+
+            if personagem_para_apagar != "Nenhum":
+
+                apagar_personagem(
+                    personagem_para_apagar
+                )
+
+                st.success(
+                    "Personagem apagado."
+                )
+
+                st.rerun()
 
 
-        # Valores padrão
-        
-        nome_personagem = ""
-        idade_personagem = ""
-        aparencia_personagem = ""
-        roupa_personagem = ""
-        personalidade_personagem = ""
+    st.divider()
 
 
-        # Lista de personagens salvos
-        
-        if lista_personagens:
+    # ========================================================
+    # 🧠 MEMÓRIA
+    # ========================================================
 
-            personagem_escolhido = st.sidebar.selectbox(
-                "Escolha um personagem",
-                [p[0] for p in lista_personagens]
+    st.header("🧠 Memória")
+
+    memorias = carregar_memorias()
+
+
+    if memorias:
+
+        st.caption(
+            f"{len(memorias)} memória(s) salva(s)"
+        )
+
+        memoria_para_apagar = st.selectbox(
+            "Escolha uma memória",
+            ["Nenhuma"] + memorias,
+            key="memoria_apagar"
+        )
+
+
+        if st.button(
+            "🗑️ Apagar memória",
+            use_container_width=True
+        ):
+
+            if memoria_para_apagar != "Nenhuma":
+
+                apagar_memoria(
+                    memoria_para_apagar
+                )
+
+                st.rerun()
+
+
+        if st.button(
+            "🗑️ Apagar todas as memórias",
+            use_container_width=True
+        ):
+
+            apagar_todas_memorias()
+
+            st.rerun()
+
+    else:
+
+        st.caption(
+            "Nenhuma memória salva."
+        )
+
+
+    st.divider()
+
+
+    # ========================================================
+    # 📄 ARQUIVOS
+    # ========================================================
+
+    st.header("📄 Arquivos")
+
+    arquivo = st.file_uploader(
+        "Enviar arquivo",
+        type=["pdf", "txt", "docx"]
+    )
+
+
+    if arquivo:
+
+        if st.button(
+            "📥 Ler arquivo",
+            use_container_width=True
+        ):
+
+            texto_arquivo, erro_arquivo = (
+                ler_arquivo(arquivo)
             )
 
 
-            if personagem_escolhido:
+            if erro_arquivo:
 
-                cursor.execute("""
-                    SELECT idade, aparencia, roupa, personalidade
-                    FROM personagens
-                    WHERE nome = ?
-                """, (personagem_escolhido,))
-
-                dados = cursor.fetchone()
-
-
-                if dados:
-
-                    nome_personagem = personagem_escolhido
-                    idade_personagem = dados[0]
-                    aparencia_personagem = dados[1]
-                    roupa_personagem = dados[2]
-                    personalidade_personagem = dados[3]
-
-
-        # Campos do personagem
-        
-        nome_personagem = st.sidebar.text_input(
-            "Nome",
-            value=nome_personagem
-        )
-
-        idade_personagem = st.sidebar.text_input(
-            "Idade",
-            value=idade_personagem
-        )
-
-        aparencia_personagem = st.sidebar.text_area(
-            "Aparência",
-            value=aparencia_personagem
-        )
-
-        roupa_personagem = st.sidebar.text_input(
-            "Roupa",
-            value=roupa_personagem
-        )
-
-        personalidade_personagem = st.sidebar.text_area(
-            "Personalidade",
-            value=personalidade_personagem
-        )
-
-
-        # Salvar personagem
-        
-        if st.sidebar.button("💾 Salvar personagem"):
-
-            if not nome_personagem.strip():
-
-                st.sidebar.warning(
-                    "Digite um nome para o personagem."
+                st.error(
+                    f"❌ {erro_arquivo}"
                 )
 
             else:
 
-                st.session_state.personagem = {
-                    "nome": nome_personagem,
-                    "idade": idade_personagem,
-                    "aparencia": aparencia_personagem,
-                    "roupa": roupa_personagem,
-                    "personalidade": personalidade_personagem,
-                }
+                st.session_state.arquivo_contexto = (
+                    texto_arquivo[:50000]
+                )
 
+                st.session_state.arquivo_nome = (
+                    arquivo.name
+                )
 
-                personagens_salvos[nome_personagem] = (
-                    st.session_state.personagem
+                st.success(
+                    "✅ Arquivo carregado!"
                 )
 
 
-                with open(
-                    "personagens.json",
-                    "w",
-                    encoding="utf-8"
-                ) as arquivo:
+    if st.session_state.arquivo_contexto:
 
-                    json.dump(
-                        personagens_salvos,
-                        arquivo,
-                        ensure_ascii=False,
-                        indent=4
-                    )
+        st.caption(
+            f"📎 {st.session_state.arquivo_nome}"
+        )
 
+        if st.button(
+            "🗑️ Remover arquivo",
+            use_container_width=True
+        ):
 
-                cursor.execute("""
-                    INSERT OR REPLACE INTO personagens
-                    (nome, idade, aparencia, roupa, personalidade)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (
-                    nome_personagem,
-                    idade_personagem,
-                    aparencia_personagem,
-                    roupa_personagem,
-                    personalidade_personagem
-                ))
+            st.session_state.arquivo_contexto = ""
+
+            st.session_state.arquivo_nome = ""
+
+            st.rerun()
 
 
-                conn.commit()
-
-                st.sidebar.success(
-                    "✅ Personagem salvo!"
-                )
+    st.divider()
 
 
-        # 💬 Histórico visual da conversa
-        
-        for mensagem in st.session_state.mensagens:
+    # ========================================================
+    # 🖼️ IMAGEM
+    # ========================================================
 
-            if mensagem["role"] == "user":
-                with st.chat_message("user"):
-                    st.write(mensagem["content"])
+    st.header("🖼️ Imagens")
 
-            elif mensagem["role"] == "assistant":
-                with st.chat_message("assistant"):
-                    st.write(mensagem["content"])
-        
+    if huggingface_disponivel:
 
+        st.success(
+            "Hugging Face conectado"
+        )
 
-        # Campo da pergunta
-        
-        pergunta = st.chat_input(
-            "Digite sua mensagem..."
+    else:
+
+        st.warning(
+            "HF_TOKEN não configurado"
         )
 
 
-        if pergunta:
+    st.divider()
 
-            # Guarda a mensagem do usuário
-            
+
+    # ========================================================
+    # 🔊 VOZ
+    # ========================================================
+
+    st.header("🔊 Voz")
+
+    usar_voz = st.checkbox(
+        "🔊 Ler respostas da Alex",
+        value=False
+    )
+
+
+    st.divider()
+
+
+    # ========================================================
+    # 🎬 VÍDEO
+    # ========================================================
+
+    st.header("🎬 Vídeo")
+
+    camera_video, proporcao_video, duracao_video = (
+        mostrar_configuracao_video()
+    )
+
+
+    st.divider()
+
+
+    # ========================================================
+    # 💻 CÓDIGO
+    # ========================================================
+
+    st.header("💻 Programação")
+
+    linguagem_codigo = st.selectbox(
+        "Linguagem",
+        listar_linguagens()
+    )
+
+
+# ============================================================
+# 💬 HISTÓRICO DA CONVERSA
+# ============================================================
+
+for mensagem in st.session_state.mensagens:
+
+    if mensagem["role"] == "user":
+
+        with st.chat_message("user"):
+
+            st.write(
+                mensagem["content"]
+            )
+
+
+    elif mensagem["role"] == "assistant":
+
+        with st.chat_message("assistant"):
+
+            st.write(
+                mensagem["content"]
+            )
+
+
+# ============================================================
+# 💬 CAMPO PRINCIPAL DE CHAT
+# ============================================================
+
+pergunta = st.chat_input(
+    "Digite sua mensagem para a Alex..."
+)
+
+
+# ============================================================
+# 🚀 PROCESSAMENTO
+# ============================================================
+
+if pergunta:
+
+    pergunta = pergunta.strip()
+
+
+    if not pergunta:
+        st.stop()
+
+
+    # --------------------------------------------------------
+    # Guarda mensagem do usuário
+    # --------------------------------------------------------
+
+    st.session_state.mensagens.append({
+        "role": "user",
+        "content": pergunta
+    })
+
+
+    # --------------------------------------------------------
+    # 🧠 COMANDO DE MEMÓRIA
+    # --------------------------------------------------------
+
+    if pergunta.lower().startswith("memorize:"):
+
+        informacao = pergunta[
+            len("memorize:"):
+        ].strip()
+
+
+        if informacao:
+
+            salvar_memoria(
+                informacao
+            )
+
+            resposta_memoria = (
+                "🧠 Pronto! Salvei essa informação "
+                "na minha memória."
+            )
+
+        else:
+
+            resposta_memoria = (
+                "Digite depois de `memorize:` "
+                "a informação que você quer salvar."
+            )
+
+
+        st.session_state.mensagens.append({
+            "role": "assistant",
+            "content": resposta_memoria
+        })
+
+        st.rerun()
+
+
+    # --------------------------------------------------------
+    # 🖼️ COMANDO DE IMAGEM
+    # --------------------------------------------------------
+
+    if pergunta.lower().startswith("imagem:"):
+
+        prompt_imagem = pergunta[
+            len("imagem:"):
+        ].strip()
+
+
+        if not huggingface_disponivel:
+
+            resposta_imagem = (
+                "❌ O HF_TOKEN ainda não está "
+                "configurado nos Secrets."
+            )
+
             st.session_state.mensagens.append({
-                "role": "user",
-                "content": pergunta
+                "role": "assistant",
+                "content": resposta_imagem
             })
-           # Salva memória quando o usuário usar o comando "memorize:"
-            
-            if pergunta.lower().startswith("memorize:"):
-                informacao = pergunta[9:].strip()
 
-                if informacao:
-                    salvar_memoria(informacao)
+            st.rerun()
 
-            memorias = carregar_memorias()
 
-            contexto_memoria = ""
+        if not prompt_imagem:
 
-            if memorias:
-                contexto_memoria = """
-Memórias importantes sobre o usuário:
+            resposta_imagem = (
+                "Digite o que você quer gerar "
+                "depois de `imagem:`."
+            )
 
-""" + "\n".join(
-                    f"- {memoria}" for memoria in memorias
+            st.session_state.mensagens.append({
+                "role": "assistant",
+                "content": resposta_imagem
+            })
+
+            st.rerun()
+
+
+        with st.chat_message("assistant"):
+
+            st.write(
+                "🖼️ Gerando sua imagem..."
+            )
+
+            mostrar_imagem(
+                prompt_imagem
+            )
+
+
+        st.session_state.mensagens.append({
+            "role": "assistant",
+            "content": "🖼️ Imagem gerada pela Alex IA."
+        })
+
+        st.stop()
+
+
+    # --------------------------------------------------------
+    # 🎬 COMANDO DE VÍDEO
+    # --------------------------------------------------------
+
+    if pergunta.lower().startswith("video:"):
+
+        descricao_video = pergunta[
+            len("video:"):
+        ].strip()
+
+
+        if not descricao_video:
+
+            resposta_video = (
+                "Digite a descrição depois de `video:`."
+            )
+
+        else:
+
+            prompt_video = preparar_prompt_video(
+                descricao=descricao_video,
+                camera=camera_video,
+                proporcao=proporcao_video,
+                duracao=duracao_video
+            )
+
+
+            resposta_video = (
+                "🎬 O módulo cinematográfico preparou "
+                "o prompt do vídeo.\n\n"
+                f"{prompt_video}\n\n"
+                "⚠️ A geração de vídeo real ainda não "
+                "está conectada ao provedor."
+            )
+
+
+        st.session_state.mensagens.append({
+            "role": "assistant",
+            "content": resposta_video
+        })
+
+        st.rerun()
+
+
+    # --------------------------------------------------------
+    # 💻 COMANDO DE CÓDIGO
+    # --------------------------------------------------------
+
+    if pergunta.lower().startswith("codigo:"):
+
+        pedido_codigo = pergunta[
+            len("codigo:"):
+        ].strip()
+
+
+        if not pedido_codigo:
+
+            resposta_codigo = (
+                "Digite o que você quer programar "
+                "depois de `codigo:`."
+            )
+
+        else:
+
+            prompt_codigo = preparar_pedido_codigo(
+                pedido=pedido_codigo,
+                linguagem=linguagem_codigo
+            )
+
+
+            try:
+
+                resposta = cliente.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=prompt_codigo
+                )
+
+                resposta_codigo = resposta.text
+
+            except Exception as erro:
+
+                resposta_codigo = (
+                    f"❌ Erro ao gerar código: {erro}"
                 )
 
 
-            # Contexto do personagem
-            
-            contexto_personagem = ""
+        st.session_state.mensagens.append({
+            "role": "assistant",
+            "content": resposta_codigo
+        })
+
+        st.rerun()
 
 
-            if nome_personagem.strip():
+    # --------------------------------------------------------
+    # 📄 ARQUIVO + CHAT
+    # --------------------------------------------------------
 
-                contexto_personagem = f"""
-Existe um personagem criado pelo usuário.
+    contexto_arquivo = ""
 
-Nome: {nome_personagem}
-Idade: {idade_personagem}
-Aparência: {aparencia_personagem}
-Roupa: {roupa_personagem}
-Personalidade: {personalidade_personagem}
+    if st.session_state.arquivo_contexto:
 
-Use esse personagem somente quando o usuário pedir.
+        contexto_arquivo = f"""
+Arquivo enviado pelo usuário:
+
+Nome:
+{st.session_state.arquivo_nome}
+
+Conteúdo:
+
+{st.session_state.arquivo_contexto}
 """
 
 
-            # Monta o histórico da conversa
-            
-            historico = ""
+    # --------------------------------------------------------
+    # 🎭 PERSONAGEM
+    # --------------------------------------------------------
 
-            for mensagem in st.session_state.mensagens:
+    contexto_personagem = ""
 
-                if mensagem["role"] == "user":
-
-                    historico += (
-                        f"Geovani: {mensagem['content']}\n"
-                    )
-
-                elif mensagem["role"] == "assistant":
-
-                    historico += (
-                        f"Alex IA: {mensagem['content']}\n"
-                    )
+    personagem = st.session_state.personagem_atual
 
 
-            # Envia para o Gemini
-            
-                                # 🖼️ Geração de imagem
-            if pergunta.lower().startswith("imagem:"):
+    if personagem:
 
-                prompt_imagem = pergunta[7:].strip()
+        contexto_personagem = f"""
+Personagem atualmente selecionado:
 
-                if not prompt_imagem:
+Nome:
+{personagem["nome"]}
 
-                    st.warning(
-                        "Digite o que você quer que a Alex IA gere."
-                    )
+Idade:
+{personagem["idade"]}
 
-                else:
+Aparência:
+{personagem["aparencia"]}
 
-                    try:
+Roupa:
+{personagem["roupa"]}
 
-                        # Conecta ao Hugging Face usando o token dos Secrets
-                        cliente_imagem = InferenceClient(
-                            provider="auto",
-                            api_key=st.secrets["HF_TOKEN"]
-                        )
+Personalidade:
+{personagem["personalidade"]}
 
-                        # Gera a imagem
-                        imagem = cliente_imagem.text_to_image(
-                            prompt=prompt_imagem,
-                            model="black-forest-labs/FLUX.1-schnell"
-                        )
-
-                        # Mostra a imagem
-                        st.image(
-                            imagem,
-                            caption="🖼️ Imagem gerada pela Alex IA",
-                            use_container_width=True
-                        )
-
-                    except Exception as erro_imagem:
-
-                        st.error(
-                            f"Erro ao gerar imagem: {erro_imagem}"
-                        )
+Use o personagem somente quando isso fizer sentido
+para o pedido do usuário.
+"""
 
 
-            # 🤖 Conversa normal
-            else:
+    # --------------------------------------------------------
+    # 🧠 MEMÓRIAS
+    # --------------------------------------------------------
 
-                resposta = cliente.models.generate_content(
+    memorias = carregar_memorias()
 
-                    model="gemini-3.1-flash-lite",
+    contexto_memoria = ""
 
-                    contents=f"""
+    if memorias:
+
+        contexto_memoria = """
+Memórias importantes do usuário:
+
+""" + "\n".join(
+            f"- {memoria}"
+            for memoria in memorias
+        )
+
+
+    # --------------------------------------------------------
+    # 📜 HISTÓRICO
+    # --------------------------------------------------------
+
+    historico = ""
+
+    for mensagem in st.session_state.mensagens:
+
+        if mensagem["role"] == "user":
+
+            historico += (
+                f"Geovani: "
+                f"{mensagem['content']}\n"
+            )
+
+        elif mensagem["role"] == "assistant":
+
+            historico += (
+                f"{AI_NAME}: "
+                f"{mensagem['content']}\n"
+            )
+
+
+    # --------------------------------------------------------
+    # 🧠 INSTRUÇÃO FINAL
+    # --------------------------------------------------------
+
+    instrucao = f"""
 {SYSTEM_PROMPT}
 
-Converse naturalmente com o usuário.
+Regras adicionais:
 
-Regras:
-
-- Entenda o contexto da conversa.
-- Lembre-se das mensagens anteriores.
-- Use o histórico da conversa para manter continuidade.
-- Se o usuário pedir um personagem, crie ou interprete esse personagem.
-- Se o usuário não pedir personagem, responda normalmente como Alex IA.
-- Não obrigue o usuário a escolher um modo.
-- Sempre responda em português do Brasil.
-- Seja criativo, organizado e ajude Geovani em seus projetos.
+- Responda sempre em português do Brasil.
+- Você está conversando diretamente com Geovani.
+- Mantenha continuidade com o histórico.
+- Use as memórias quando forem relevantes.
+- Use o personagem somente quando necessário.
+- Se houver um arquivo enviado, analise seu conteúdo.
+- Não invente informações sobre arquivos.
+- Seja clara, inteligente e objetiva.
+- Ajude Geovani a desenvolver a Alex IA Ultra.
+- Quando não souber algo, diga claramente.
 
 {contexto_memoria}
 
 {contexto_personagem}
 
+{contexto_arquivo}
+
 Histórico da conversa:
 
 {historico}
 
-Pergunta atual de Geovani:
+Pergunta atual:
 
 {pergunta}
 """
+
+
+    # --------------------------------------------------------
+    # 🤖 GEMINI
+    # --------------------------------------------------------
+
+    try:
+
+        with st.chat_message("assistant"):
+
+            with st.spinner(
+                "🤖 Alex IA está pensando..."
+            ):
+
+                resposta = cliente.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=instrucao
                 )
 
 
-                # Texto da resposta
-
-                texto_resposta = resposta.text
-
-
-                # Guarda a resposta na memória
-
-                st.session_state.mensagens.append({
-                    "role": "assistant",
-                    "content": texto_resposta
-                })
-                
-               # Mostra resposta
-
-                st.subheader("🤖 Alex IA respondeu:")
-
-                st.write(texto_resposta)
+                texto_resposta = (
+                    resposta.text
+                    if resposta.text
+                    else "Não consegui gerar uma resposta."
+                )
 
 
-    except Exception as e:
+            st.write(
+                texto_resposta
+            )
 
-        st.error(
-            f"Erro: {e}"
+
+            # ------------------------------------------------
+            # 🔊 VOZ
+            # ------------------------------------------------
+
+            if usar_voz:
+
+                with st.spinner(
+                    "🔊 Gerando voz..."
+                ):
+
+                    mostrar_audio(
+                        texto_resposta
+                    )
+
+
+        st.session_state.mensagens.append({
+            "role": "assistant",
+            "content": texto_resposta
+        })
+
+
+    except Exception as erro:
+
+        mensagem_erro = (
+            f"❌ Erro ao conversar com o Gemini:\n\n"
+            f"{erro}"
         )
 
 
-    finally:
-
-        conn.close()
+  
