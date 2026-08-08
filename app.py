@@ -387,45 +387,44 @@ Use esse personagem somente quando o usuário pedir.
 
             # Envia para o Gemini
             
-            # 🖼️ Geração de imagem
+                                # 🖼️ Geração de imagem
             if pergunta.lower().startswith("imagem:"):
 
                 prompt_imagem = pergunta[7:].strip()
 
                 if not prompt_imagem:
+
                     st.warning(
                         "Digite o que você quer que a Alex IA gere."
                     )
 
                 else:
 
-                    resposta_imagem = cliente.models.generate_content(
-                        model="gemini-3.1-flash-image",
-                        contents=prompt_imagem
-                    )
+                    try:
 
-                    imagem_gerada = False
+                        # Conecta ao Hugging Face usando o token dos Secrets
+                        cliente_imagem = InferenceClient(
+                            provider="auto",
+                            api_key=st.secrets["HF_TOKEN"]
+                        )
 
-                    for parte in resposta_imagem.parts:
+                        # Gera a imagem
+                        imagem = cliente_imagem.text_to_image(
+                            prompt=prompt_imagem,
+                            model="black-forest-labs/FLUX.1-schnell"
+                        )
 
-                        if parte.text is not None:
-                            st.write(parte.text)
+                        # Mostra a imagem
+                        st.image(
+                            imagem,
+                            caption="🖼️ Imagem gerada pela Alex IA",
+                            use_container_width=True
+                        )
 
-                        elif parte.inline_data is not None:
+                    except Exception as erro_imagem:
 
-                            imagem = parte.as_image()
-
-                            st.image(
-                                imagem,
-                                caption="🖼️ Imagem gerada pela Alex IA",
-                                use_container_width=True
-                            )
-
-                            imagem_gerada = True
-
-                    if not imagem_gerada:
-                        st.warning(
-                            "A Alex IA não conseguiu gerar a imagem."
+                        st.error(
+                            f"Erro ao gerar imagem: {erro_imagem}"
                         )
 
 
@@ -479,7 +478,7 @@ Pergunta atual de Geovani:
                     "content": texto_resposta
                 })
                 
-                    # Mostra resposta
+               # Mostra resposta
 
                 st.subheader("🤖 Alex IA respondeu:")
 
