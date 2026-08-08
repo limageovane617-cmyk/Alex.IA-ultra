@@ -330,6 +330,8 @@ Regras:
 - Sempre responda em português do Brasil.
 - Seja criativo, organizado e ajude Geovani em seus projetos.
 
+{contexto_memoria}
+
 {contexto_personagem}
 
 Histórico da conversa:
