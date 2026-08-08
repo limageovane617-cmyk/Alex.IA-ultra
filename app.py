@@ -386,11 +386,56 @@ Use esse personagem somente quando o usuário pedir.
 
             # Envia para o Gemini
             
-            resposta = cliente.models.generate_content(
+            # 🖼️ Geração de imagem
+            if pergunta.lower().startswith("imagem:"):
 
-                model="gemini-3.1-flash-lite",
+                prompt_imagem = pergunta[7:].strip()
 
-                contents=f"""
+                if not prompt_imagem:
+                    st.warning(
+                        "Digite o que você quer que a Alex IA gere."
+                    )
+
+                else:
+
+                    resposta_imagem = cliente.models.generate_content(
+                        model="gemini-3.1-flash-image",
+                        contents=prompt_imagem
+                    )
+
+                    imagem_gerada = False
+
+                    for parte in resposta_imagem.parts:
+
+                        if parte.text is not None:
+                            st.write(parte.text)
+
+                        elif parte.inline_data is not None:
+
+                            imagem = parte.as_image()
+
+                            st.image(
+                                imagem,
+                                caption="🖼️ Imagem gerada pela Alex IA",
+                                use_container_width=True
+                            )
+
+                            imagem_gerada = True
+
+                    if not imagem_gerada:
+                        st.warning(
+                            "A Alex IA não conseguiu gerar a imagem."
+                        )
+
+
+            # 🤖 Conversa normal
+            else:
+
+                resposta = cliente.models.generate_content(
+
+                    model="gemini-3.1-flash-lite",
+
+                    contents=f"""
 {SYSTEM_PROMPT}
 
 Converse naturalmente com o usuário.
@@ -418,27 +463,26 @@ Pergunta atual de Geovani:
 
 {pergunta}
 """
-            )
+                )
 
 
-            # Texto da resposta
-            
-            texto_resposta = resposta.text
+                # Texto da resposta
+
+                texto_resposta = resposta.text
 
 
-            # Guarda a resposta na memória
-            
-            st.session_state.mensagens.append({
-                "role": "assistant",
-                "content": texto_resposta
-            })
+                # Guarda a resposta na memória
 
+                st.session_state.mensagens.append({
+                    "role": "assistant",
+                    "content": texto_resposta
+                })
+                
+                    # Mostra resposta
 
-            # Mostra resposta
-            
-            st.subheader("🤖 Alex IA respondeu:")
+                st.subheader("🤖 Alex IA respondeu:")
 
-            st.write(texto_resposta)
+                st.write(texto_resposta)
 
 
     except Exception as e:
