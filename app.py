@@ -262,8 +262,8 @@ if api_key:
 
             contexto_memoria = ""
 
-           if memorias:
-              contexto_memoria = """
+            if memorias:
+               contexto_memoria = """
 Memórias importantes sobre o usuário:
 
 """ + "\n".join(f"- {memoria}" for memoria in memorias)
