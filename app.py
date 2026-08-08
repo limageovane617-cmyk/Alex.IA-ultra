@@ -18,6 +18,25 @@ st.caption(
     "Olá Geovani! Eu sou sua inteligência artificial pessoal. "
     "Estou pronto para criar, escrever, programar e ajudar você no que precisar."
 )
+# 🎨 Estilo do painel de conversa
+st.markdown("""
+<style>
+
+.chat-painel {
+    position: fixed;
+    bottom: 15px;
+    left: 5%;
+    width: 90%;
+    background: rgba(25, 25, 35, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    padding: 12px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+    z-index: 999;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 
 # Memória da conversa
