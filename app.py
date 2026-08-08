@@ -296,6 +296,7 @@ if api_key:
 
 
         # 💬 Histórico visual da conversa
+        
         for mensagem in st.session_state.mensagens:
 
             if mensagem["role"] == "user":
@@ -309,6 +310,7 @@ if api_key:
 
 
         # Campo da pergunta
+        
         pergunta = st.chat_input(
             "Digite sua mensagem..."
         )
