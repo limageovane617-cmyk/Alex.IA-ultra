@@ -6,6 +6,7 @@ from config import SYSTEM_PROMPT
 
 
 # Configuração da página
+
 st.set_page_config(
     page_title="Alex IA",
     page_icon="🤖",
