@@ -965,6 +965,12 @@ Pergunta atual:
             f"❌ Erro ao conversar com o Gemini:\n\n"
             f"{erro}"
         )
+        st.session_state.mensagens.append({
+            "role": "assistant",
+            "content": mensagem_erro
+        })
+
+        st.error(mensagem_erro)
 
 
   
