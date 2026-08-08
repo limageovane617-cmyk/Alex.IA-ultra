@@ -258,16 +258,18 @@ if api_key:
                 "role": "user",
                 "content": pergunta
             })
+
             memorias = carregar_memorias()
 
             contexto_memoria = ""
 
             if memorias:
-               contexto_memoria = """
+                contexto_memoria = """
 Memórias importantes sobre o usuário:
 
-""" + "\n".join(f"- {memoria}" for memoria in memorias)
-            
+""" + "\n".join(
+                    f"- {memoria}" for memoria in memorias
+                )
 
 
             # Contexto do personagem
