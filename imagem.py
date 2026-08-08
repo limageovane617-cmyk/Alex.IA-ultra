@@ -13,9 +13,6 @@ MODELO_IMAGEM = "black-forest-labs/FLUX.1-schnell"
 def gerar_imagem(prompt):
     """
     Gera uma imagem usando o Hugging Face.
-
-    Retorna:
-        imagem gerada ou None em caso de erro.
     """
 
     if not prompt or not prompt.strip():
@@ -26,7 +23,6 @@ def gerar_imagem(prompt):
         token = st.secrets["HF_TOKEN"]
 
         cliente = InferenceClient(
-            provider="auto",
             api_key=token
         )
 
