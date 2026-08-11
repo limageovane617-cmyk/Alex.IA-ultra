@@ -21,7 +21,9 @@ if st.button("🖼️ Gerar imagem", type="primary"):
         token = st.secrets["HF_TOKEN"]
 
         cliente = InferenceClient(
-            api_key=token
+    api_key=token,
+    provider="auto"
+        
         )
 
         with st.spinner("🎨 Gerando imagem..."):
