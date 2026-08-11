@@ -1,15 +1,28 @@
 import streamlit as st
+import requests
 
-st.title("🔐 Teste do HF_TOKEN")
+st.title("🔐 Teste Hugging Face")
 
-try:
-    token = st.secrets["HF_TOKEN"]
+token = st.secrets["HF_TOKEN"]
 
-    st.write("Secret encontrado:", True)
-    st.write("Começa com hf_:", token.startswith("hf_"))
-    st.write("Tem espaços no começo/fim:", token != token.strip())
-    st.write("Quantidade de caracteres:", len(token))
+headers = {
+    "Authorization": f"Bearer {token}"
+}
 
-except Exception as erro:
-    st.error("❌ Não consegui ler HF_TOKEN.")
-    st.code(str(erro))
+resposta = requests.get(
+    "https://huggingface.co/api/whoami-v2",
+    headers=headers,
+    timeout=30
+)
+
+st.write("Código:", resposta.status_code)
+
+if resposta.status_code == 200:
+    dados = resposta.json()
+
+    st.success("✅ Token autenticado com sucesso!")
+    st.write("Usuário:", dados.get("name"))
+
+else:
+    st.error("❌ Hugging Face recusou o token.")
+    st.code(resposta.text)
