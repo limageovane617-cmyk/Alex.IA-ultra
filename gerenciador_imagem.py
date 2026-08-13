@@ -419,3 +419,4 @@ def limpar_ultima_imagem():
             chave,
             None
     )
+        st.sidebar.info("🧪 GERENCIADOR DE IMAGEM NOVO CARREGADO")
