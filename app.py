@@ -514,7 +514,7 @@ if pergunta:
     # --------------------------------------------------------
     # 🖼️ COMANDO DE IMAGEM
     # --------------------------------------------------------
-    # A Alex entende várias formas naturais de pedir imagens.
+    # A Alex entende pedidos naturais de geração de imagens.
     # --------------------------------------------------------
 
     texto_pergunta = pergunta.lower().strip()
@@ -553,6 +553,21 @@ if pergunta:
         "gerar uma arte",
         "faça uma arte",
         "faca uma arte",
+
+        # Formas naturais
+        "cria ",
+        "crie ",
+        "criar ",
+        "gera ",
+        "gere ",
+        "gerar ",
+        "faz ",
+        "faca ",
+        "faça ",
+        "fazer ",
+        "desenha ",
+        "desenhe ",
+        "desenhar ",
     )
 
     pedido_eh_imagem = texto_pergunta.startswith(
@@ -562,7 +577,7 @@ if pergunta:
     if pedido_eh_imagem:
 
         # ----------------------------------------------------
-        # Remove o comando e deixa somente a descrição
+        # 📝 Remove o comando inicial
         # ----------------------------------------------------
 
         prompt_imagem = pergunta.strip()
@@ -589,28 +604,55 @@ if pergunta:
             r"^fazer\s+imagem\s*(?:de|do|da|dos|das)?\s*",
 
             r"^quero\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
             r"^quero\s+criar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
             r"^quero\s+gerar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
 
             r"^pode\s+criar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
             r"^pode\s+gerar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
             r"^pode\s+fazer\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
 
             r"^consegue\s+criar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
             r"^consegue\s+gerar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
 
             r"^produza\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
             r"^produzir\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
 
             r"^desenhe\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
             r"^desenhar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
 
             r"^crie\s+uma\s+arte\s*(?:de|do|da|dos|das)?\s*",
+
             r"^criar\s+uma\s+arte\s*(?:de|do|da|dos|das)?\s*",
+
             r"^gere\s+uma\s+arte\s*(?:de|do|da|dos|das)?\s*",
+
             r"^gerar\s+uma\s+arte\s*(?:de|do|da|dos|das)?\s*",
+
             r"^faça\s+uma\s+arte\s*(?:de|do|da|dos|das)?\s*",
+
             r"^faca\s+uma\s+arte\s*(?:de|do|da|dos|das)?\s*",
+
+            # Formas curtas
+            r"^cria\s+",
+            r"^crie\s+",
+            r"^criar\s+",
+            r"^gera\s+",
+            r"^gere\s+",
+            r"^gerar\s+",
+            r"^faz\s+",
+            r"^faca\s+",
+            r"^faça\s+",
+            r"^fazer\s+",
+            r"^desenha\s+",
+            r"^desenhe\s+",
+            r"^desenhar\s+",
         )
 
         for padrao in padroes_remover:
@@ -629,7 +671,7 @@ if pergunta:
                 break
 
         # ----------------------------------------------------
-        # Verifica Hugging Face
+        # 🔐 Verificar serviço
         # ----------------------------------------------------
 
         if not huggingface_disponivel:
@@ -647,7 +689,7 @@ if pergunta:
             st.rerun()
 
         # ----------------------------------------------------
-        # Verifica descrição
+        # 📝 Verificar prompt
         # ----------------------------------------------------
 
         if not prompt_imagem:
@@ -664,7 +706,7 @@ if pergunta:
             st.rerun()
 
         # ----------------------------------------------------
-        # GERA A IMAGEM
+        # 🎨 GERAR
         # ----------------------------------------------------
 
         with st.chat_message("assistant"):
@@ -676,10 +718,6 @@ if pergunta:
             sucesso_imagem = mostrar_imagem(
                 prompt_imagem
             )
-
-        # ----------------------------------------------------
-        # Resposta final
-        # ----------------------------------------------------
 
         if sucesso_imagem:
 
@@ -699,8 +737,9 @@ if pergunta:
             "content": resposta_imagem
         })
 
-        # Impede que o pedido vá para o Gemini
+        # Não deixa o pedido chegar ao Gemini.
         st.stop()
+        
     # --------------------------------------------------------
     # 🎬 COMANDO DE VÍDEO
     # --------------------------------------------------------
