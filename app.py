@@ -7,6 +7,7 @@
 import os
 import re
 import streamlit as st
+
 st.sidebar.success("✅ APP NOVO CARREGADO — NVIDIA")
 
 # ============================================================
