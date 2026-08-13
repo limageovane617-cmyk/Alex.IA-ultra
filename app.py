@@ -514,8 +514,7 @@ if pergunta:
     # --------------------------------------------------------
     # 🖼️ COMANDO DE IMAGEM
     # --------------------------------------------------------
-    # Aceita "imagem:" e pedidos naturais como:
-    # "gere uma imagem de uma cidade futurista"
+    # A Alex entende várias formas naturais de pedir imagens.
     # --------------------------------------------------------
 
     texto_pergunta = pergunta.lower().strip()
@@ -523,59 +522,115 @@ if pergunta:
     prefixos_imagem = (
         "imagem:",
         "gerar imagem",
-        "gere uma imagem",
         "gere imagem",
-        "crie uma imagem",
-        "criar uma imagem",
+        "gere uma imagem",
+        "gerar uma imagem",
         "crie imagem",
+        "crie uma imagem",
         "criar imagem",
-        "faça uma imagem",
-        "faca uma imagem",
-        "fazer uma imagem",
+        "criar uma imagem",
         "faça imagem",
         "faca imagem",
+        "faça uma imagem",
+        "faca uma imagem",
+        "fazer imagem",
+        "fazer uma imagem",
+        "quero uma imagem",
+        "quero criar uma imagem",
+        "quero gerar uma imagem",
+        "pode criar uma imagem",
+        "pode gerar uma imagem",
+        "pode fazer uma imagem",
+        "consegue criar uma imagem",
+        "consegue gerar uma imagem",
+        "produza uma imagem",
+        "produzir uma imagem",
+        "desenhe uma imagem",
+        "desenhar uma imagem",
+        "crie uma arte",
+        "criar uma arte",
+        "gere uma arte",
+        "gerar uma arte",
+        "faça uma arte",
+        "faca uma arte",
     )
 
-    pedido_eh_imagem = texto_pergunta.startswith(prefixos_imagem)
+    pedido_eh_imagem = texto_pergunta.startswith(
+        prefixos_imagem
+    )
 
     if pedido_eh_imagem:
 
-        if texto_pergunta.startswith("imagem:"):
+        # ----------------------------------------------------
+        # Remove o comando e deixa somente a descrição
+        # ----------------------------------------------------
 
-            prompt_imagem = pergunta.split(":", 1)[1].strip()
+        prompt_imagem = pergunta.strip()
 
-        else:
+        padroes_remover = (
+            r"^imagem:\s*",
 
-            prompt_imagem = pergunta.strip()
+            r"^gere\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+            r"^gere\s+imagem\s*(?:de|do|da|dos|das)?\s*",
 
-            padroes_remover = (
-                r"^gere\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
-                r"^gere\s+imagem\s*(?:de|do|da|dos|das)?\s*",
-                r"^gerar\s+imagem\s*(?:de|do|da|dos|das)?\s*",
-                r"^crie\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
-                r"^criar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
-                r"^crie\s+imagem\s*(?:de|do|da|dos|das)?\s*",
-                r"^criar\s+imagem\s*(?:de|do|da|dos|das)?\s*",
-                r"^faça\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
-                r"^faca\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
-                r"^fazer\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
-                r"^faça\s+imagem\s*(?:de|do|da|dos|das)?\s*",
-                r"^faca\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+            r"^gerar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+            r"^gerar\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
+            r"^crie\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+            r"^crie\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
+            r"^criar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+            r"^criar\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
+            r"^faça\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+            r"^faca\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
+            r"^fazer\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+            r"^fazer\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
+            r"^quero\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+            r"^quero\s+criar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+            r"^quero\s+gerar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
+            r"^pode\s+criar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+            r"^pode\s+gerar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+            r"^pode\s+fazer\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
+            r"^consegue\s+criar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+            r"^consegue\s+gerar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
+            r"^produza\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+            r"^produzir\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
+            r"^desenhe\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+            r"^desenhar\s+uma\s+imagem\s*(?:de|do|da|dos|das)?\s*",
+
+            r"^crie\s+uma\s+arte\s*(?:de|do|da|dos|das)?\s*",
+            r"^criar\s+uma\s+arte\s*(?:de|do|da|dos|das)?\s*",
+            r"^gere\s+uma\s+arte\s*(?:de|do|da|dos|das)?\s*",
+            r"^gerar\s+uma\s+arte\s*(?:de|do|da|dos|das)?\s*",
+            r"^faça\s+uma\s+arte\s*(?:de|do|da|dos|das)?\s*",
+            r"^faca\s+uma\s+arte\s*(?:de|do|da|dos|das)?\s*",
+        )
+
+        for padrao in padroes_remover:
+
+            novo_prompt = re.sub(
+                padrao,
+                "",
+                prompt_imagem,
+                count=1,
+                flags=re.IGNORECASE
             )
 
-            for padrao in padroes_remover:
+            if novo_prompt != prompt_imagem:
 
-                novo_prompt = re.sub(
-                    padrao,
-                    "",
-                    prompt_imagem,
-                    count=1,
-                    flags=re.IGNORECASE
-                )
+                prompt_imagem = novo_prompt.strip()
+                break
 
-                if novo_prompt != prompt_imagem:
-                    prompt_imagem = novo_prompt.strip()
-                    break
+        # ----------------------------------------------------
+        # Verifica Hugging Face
+        # ----------------------------------------------------
 
         if not huggingface_disponivel:
 
@@ -591,11 +646,14 @@ if pergunta:
 
             st.rerun()
 
+        # ----------------------------------------------------
+        # Verifica descrição
+        # ----------------------------------------------------
+
         if not prompt_imagem:
 
             resposta_imagem = (
-                "🖼️ Diga o que você quer gerar. "
-                "Exemplo: gere uma imagem de uma cidade futurista."
+                "🖼️ Diga o que você quer na imagem."
             )
 
             st.session_state.mensagens.append({
@@ -605,18 +663,28 @@ if pergunta:
 
             st.rerun()
 
+        # ----------------------------------------------------
+        # GERA A IMAGEM
+        # ----------------------------------------------------
+
         with st.chat_message("assistant"):
 
-            st.write("🖼️ Gerando sua imagem...")
+            st.write(
+                "🖼️ Entendi! Vou criar sua imagem agora..."
+            )
 
             sucesso_imagem = mostrar_imagem(
                 prompt_imagem
             )
 
+        # ----------------------------------------------------
+        # Resposta final
+        # ----------------------------------------------------
+
         if sucesso_imagem:
 
             resposta_imagem = (
-                "🖼️ Imagem gerada pela Alex IA."
+                "🖼️ Pronto! Sua imagem foi criada."
             )
 
         else:
@@ -631,8 +699,8 @@ if pergunta:
             "content": resposta_imagem
         })
 
+        # Impede que o pedido vá para o Gemini
         st.stop()
-
     # --------------------------------------------------------
     # 🎬 COMANDO DE VÍDEO
     # --------------------------------------------------------
