@@ -48,6 +48,10 @@ def gerar_imagem(prompt):
             api_name="/generate_image"
         )
 
+        # ----------------------------------------------------
+        # 📦 Resultado da Space
+        # ----------------------------------------------------
+
         if isinstance(resultado, tuple):
 
             imagem = resultado[0]
@@ -90,22 +94,28 @@ def guardar_ultima_imagem(imagem, prompt):
 
         caminho_imagem = None
 
-        # O Gradio normalmente retorna o caminho
-        # do arquivo gerado.
+        # ----------------------------------------------------
+        # 📁 Quando o Gradio retorna um caminho
+        # ----------------------------------------------------
+
         if isinstance(imagem, str):
 
             caminho_imagem = imagem
 
-        # Alguns resultados podem vir como objetos
-        # que possuem o atributo path.
+        # ----------------------------------------------------
+        # 📁 Quando o resultado possui atributo path
+        # ----------------------------------------------------
+
         elif hasattr(imagem, "path"):
 
             caminho_imagem = imagem.path
 
-        # Guarda o resultado original.
+        # ----------------------------------------------------
+        # 🧠 Guardar informações na sessão
+        # ----------------------------------------------------
+
         st.session_state.ultima_imagem = imagem
 
-        # Guarda também o caminho quando disponível.
         st.session_state.ultima_imagem_caminho = (
             caminho_imagem
         )
@@ -114,26 +124,13 @@ def guardar_ultima_imagem(imagem, prompt):
 
         return True
 
-    except Exception as erro:
-
-        st.session_state.ultima_imagem = imagem
-        st.session_state.ultima_imagem_caminho = None
-        st.session_state.ultimo_prompt_imagem = prompt
-
-        return False
-        
-    Isso permite que a Alex analise a imagem
-    posteriormente.
-    """
-
-    try:
-
-        st.session_state.ultima_imagem = imagem
-        st.session_state.ultimo_prompt_imagem = prompt
-
-        return True
-
     except Exception:
+
+        st.session_state.ultima_imagem = imagem
+
+        st.session_state.ultima_imagem_caminho = None
+
+        st.session_state.ultimo_prompt_imagem = prompt
 
         return False
 
@@ -155,6 +152,10 @@ def mostrar_imagem(prompt):
             prompt
         )
 
+    # --------------------------------------------------------
+    # ❌ Erro
+    # --------------------------------------------------------
+
     if erro:
 
         st.error(
@@ -164,7 +165,7 @@ def mostrar_imagem(prompt):
         return False
 
     # --------------------------------------------------------
-    # Guarda a imagem para análise posterior
+    # 💾 Guardar imagem
     # --------------------------------------------------------
 
     guardar_ultima_imagem(
@@ -173,7 +174,7 @@ def mostrar_imagem(prompt):
     )
 
     # --------------------------------------------------------
-    # Mostra a imagem
+    # 🖼️ Mostrar imagem
     # --------------------------------------------------------
 
     st.image(
