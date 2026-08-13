@@ -3,16 +3,20 @@
 # Criada por Geovani
 # ============================================================
 
+import io
 import os
+
 import streamlit as st
-from gradio_client import Client
+from PIL import Image
+
+from servicos import criar_cliente_gemini
 
 
 # ============================================================
 # 🎨 CONFIGURAÇÃO DO MOTOR
 # ============================================================
 
-SPACE_IMAGEM = "mrfakename/Z-Image-Turbo"
+MODELO_IMAGEM = "gemini-3.1-flash-image"
 
 
 # ============================================================
@@ -21,8 +25,7 @@ SPACE_IMAGEM = "mrfakename/Z-Image-Turbo"
 
 def gerar_imagem(prompt):
     """
-    Gera uma imagem usando o Z Image Turbo
-    através do Gradio Client.
+    Gera uma imagem usando o Gemini 3.1 Flash Image.
     """
 
     if not prompt or not prompt.strip():
@@ -34,42 +37,88 @@ def gerar_imagem(prompt):
 
     try:
 
-        cliente = Client(
-            SPACE_IMAGEM
-        )
+        cliente = criar_cliente_gemini()
 
-        resultado = cliente.predict(
-            prompt.strip(),
-            1024,
-            1024,
-            9,
-            42,
-            True,
-            api_name="/generate_image"
-        )
-
-        # ----------------------------------------------------
-        # 📦 Resultado da Space
-        # ----------------------------------------------------
-
-        if isinstance(resultado, tuple):
-
-            imagem = resultado[0]
-
-        else:
-
-            imagem = resultado
-
-        if not imagem:
+        if cliente is None:
 
             return (
                 None,
-                "❌ O gerador terminou, mas não retornou uma imagem."
+                "❌ Não foi possível conectar ao Gemini. "
+                "Verifique GEMINI_API_KEY nos Secrets."
             )
 
+        resposta = cliente.models.generate_content(
+            model=MODELO_IMAGEM,
+            contents=prompt.strip(),
+            config={
+                "response_modalities": ["IMAGE"],
+            }
+        )
+
+        if not resposta or not resposta.candidates:
+
+            return (
+                None,
+                "❌ O Gemini não retornou uma resposta."
+            )
+
+        # ----------------------------------------------------
+        # 🔎 Procurar a imagem na resposta
+        # ----------------------------------------------------
+
+        for candidato in resposta.candidates:
+
+            conteudo = getattr(
+                candidato,
+                "content",
+                None
+            )
+
+            if not conteudo:
+                continue
+
+            partes = getattr(
+                conteudo,
+                "parts",
+                []
+            )
+
+            for parte in partes:
+
+                dados_imagem = getattr(
+                    parte,
+                    "inline_data",
+                    None
+                )
+
+                if dados_imagem:
+
+                    mime_type = getattr(
+                        dados_imagem,
+                        "mime_type",
+                        "image/png"
+                    )
+
+                    dados = getattr(
+                        dados_imagem,
+                        "data",
+                        None
+                    )
+
+                    if dados:
+
+                        imagem = Image.open(
+                            io.BytesIO(dados)
+                        )
+
+                        return (
+                            imagem,
+                            None
+                        )
+
         return (
-            imagem,
-            None
+            None,
+            "❌ O Gemini terminou, mas não retornou uma imagem."
         )
 
     except Exception as erro:
@@ -84,53 +133,62 @@ def gerar_imagem(prompt):
 # 💾 GUARDAR ÚLTIMA IMAGEM
 # ============================================================
 
-def guardar_ultima_imagem(imagem, prompt):
+def guardar_ultima_imagem(
+    imagem,
+    prompt
+):
     """
-    Guarda a última imagem gerada para que a Alex
-    possa analisá-la posteriormente.
+    Guarda a última imagem gerada na sessão.
+
+    Isso permite que a Alex possa analisar
+    posteriormente a imagem criada.
     """
 
     try:
 
-        caminho_imagem = None
-
-        # ----------------------------------------------------
-        # 📁 Quando o Gradio retorna um caminho
-        # ----------------------------------------------------
-
-        if isinstance(imagem, str):
-
-            caminho_imagem = imagem
-
-        # ----------------------------------------------------
-        # 📁 Quando o resultado possui atributo path
-        # ----------------------------------------------------
-
-        elif hasattr(imagem, "path"):
-
-            caminho_imagem = imagem.path
-
-        # ----------------------------------------------------
-        # 🧠 Guardar informações na sessão
-        # ----------------------------------------------------
-
+        # Guarda a imagem diretamente.
         st.session_state.ultima_imagem = imagem
 
-        st.session_state.ultima_imagem_caminho = (
-            caminho_imagem
-        )
-
+        # Guarda o prompt utilizado.
         st.session_state.ultimo_prompt_imagem = prompt
+
+        # ----------------------------------------------------
+        # 💾 Salvar também em arquivo temporário
+        # ----------------------------------------------------
+
+        caminho = None
+
+        if isinstance(imagem, Image.Image):
+
+            pasta = os.path.join(
+                "/tmp",
+                "alex_ia_ultra"
+            )
+
+            os.makedirs(
+                pasta,
+                exist_ok=True
+            )
+
+            caminho = os.path.join(
+                pasta,
+                "ultima_imagem.png"
+            )
+
+            imagem.save(
+                caminho,
+                format="PNG"
+            )
+
+        st.session_state.ultima_imagem_caminho = caminho
 
         return True
 
     except Exception:
 
         st.session_state.ultima_imagem = imagem
-
-        st.session_state.ultima_imagem_caminho = None
-
         st.session_state.ultimo_prompt_imagem = prompt
+        st.session_state.ultima_imagem_caminho = None
 
         return False
 
@@ -151,10 +209,6 @@ def mostrar_imagem(prompt):
         imagem, erro = gerar_imagem(
             prompt
         )
-
-    # --------------------------------------------------------
-    # ❌ Erro
-    # --------------------------------------------------------
 
     if erro:
 
