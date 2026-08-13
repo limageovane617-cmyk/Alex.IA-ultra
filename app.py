@@ -672,24 +672,6 @@ if pergunta:
                 break
 
         # ----------------------------------------------------
-        # 🔐 Verificar serviço
-        # ----------------------------------------------------
-
-        if not huggingface_disponivel:
-
-            resposta_imagem = (
-                "❌ O serviço de imagem não está disponível. "
-                "Verifique o HF_TOKEN nos Secrets."
-            )
-
-            st.session_state.mensagens.append({
-                "role": "assistant",
-                "content": resposta_imagem
-            })
-
-            st.rerun()
-
-        # ----------------------------------------------------
         # 📝 Verificar prompt
         # ----------------------------------------------------
 
