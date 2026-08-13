@@ -1,62 +1,46 @@
 # ============================================================
-# 🖼️ ALEX IA ULTRA — GERENCIADOR DE IMAGENS
-# Pollinations API
+# 🖼️ ALEX IA ULTRA — GERENCIADOR DE IMAGENS NVIDIA
 # Criado por Geovani
 # ============================================================
 
 import os
-import re
+import base64
 from pathlib import Path
-from urllib.parse import quote
 
 import requests
 import streamlit as st
 
 
 # ============================================================
-# ⚙️ CONFIGURAÇÃO
+# ⚙️ CONFIGURAÇÃO NVIDIA
 # ============================================================
 
-POLLINATIONS_URL = "https://gen.pollinations.ai"
+NVIDIA_URL = "https://integrate.api.nvidia.com/v1/images/generations"
 
-# Modelos de imagem.
-# Se um falhar, o próximo será tentado automaticamente.
 MOTORES_IMAGEM = [
-    "flux",
-    "zimage",
+    "flux.2-klein-4b",
     "qwen-image",
-    "seedream",
-    "gptimage",
-    "nanobanana",
+    "flux.1-schnell",
+    "stable-diffusion-3.5-large",
 ]
 
 
 # ============================================================
-# 🔐 OBTER CHAVE
+# 🔐 CHAVE NVIDIA
 # ============================================================
 
-def obter_chave_pollinations():
-    """
-    Obtém a chave do Streamlit Secrets ou variável de ambiente.
-
-    A chave NÃO fica dentro do código.
-    """
+def obter_chave_nvidia():
 
     try:
-        chave = st.secrets.get(
-            "POLLINATIONS_API_KEY",
-            ""
-        )
+        chave = st.secrets["NVIDIA_API_KEY"]
+
+        if chave:
+            return str(chave).strip()
+
     except Exception:
-        chave = ""
+        pass
 
-    if not chave:
-        chave = os.environ.get(
-            "POLLINATIONS_API_KEY",
-            ""
-        )
-
-    return str(chave).strip()
+    return None
 
 
 # ============================================================
@@ -65,9 +49,7 @@ def obter_chave_pollinations():
 
 def obter_pasta_imagens():
 
-    pasta = Path(
-        "/tmp/alex_ia_ultra_imagens"
-    )
+    pasta = Path("/tmp/alex_ia_ultra_imagens")
 
     pasta.mkdir(
         parents=True,
@@ -87,25 +69,16 @@ def guardar_ultima_imagem(
     caminho=None,
     motor=None
 ):
-    """
-    Guarda informações da última imagem gerada.
-    """
 
     try:
 
         st.session_state.ultima_imagem = imagem
 
-        st.session_state.ultima_imagem_caminho = (
-            caminho
-        )
+        st.session_state.ultima_imagem_caminho = caminho
 
-        st.session_state.ultimo_prompt_imagem = (
-            prompt
-        )
+        st.session_state.ultimo_prompt_imagem = prompt
 
-        st.session_state.ultimo_motor_imagem = (
-            motor
-        )
+        st.session_state.ultimo_motor_imagem = motor
 
         return True
 
@@ -115,133 +88,114 @@ def guardar_ultima_imagem(
 
 
 # ============================================================
-# 🎨 GERAR IMAGEM COM POLLINATIONS
+# 🎨 GERAR IMAGEM COM NVIDIA
 # ============================================================
 
-def _gerar_com_pollinations(
-    prompt,
-    modelo
-):
-    """
-    Gera uma imagem através da API oficial
-    do Pollinations.
-    """
+def _gerar_com_nvidia(prompt, modelo):
 
-    chave = obter_chave_pollinations()
+    chave = obter_chave_nvidia()
 
     if not chave:
 
         raise RuntimeError(
-            "POLLINATIONS_API_KEY não configurada "
+            "A chave NVIDIA_API_KEY não foi encontrada "
             "nos Secrets do Streamlit."
         )
 
-    prompt_codificado = quote(
-        prompt.strip(),
-        safe=""
-    )
-
-    url = (
-        f"{POLLINATIONS_URL}/image/"
-        f"{prompt_codificado}"
-    )
-
-    parametros = {
-        "model": modelo,
-        "width": 1024,
-        "height": 1024,
-        "nologo": "true",
-    }
-
     headers = {
-        "Authorization": f"Bearer {chave}"
+        "Authorization": f"Bearer {chave}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
     }
 
-    resposta = requests.get(
-        url,
-        params=parametros,
+    dados = {
+        "model": modelo,
+        "prompt": prompt,
+        "size": "1024x1024",
+        "n": 1,
+    }
+
+    resposta = requests.post(
+        NVIDIA_URL,
         headers=headers,
-        timeout=180
+        json=dados,
+        timeout=180,
     )
 
     if resposta.status_code != 200:
 
-        texto_erro = resposta.text
-
-        if len(texto_erro) > 1500:
-            texto_erro = texto_erro[:1500]
-
         raise RuntimeError(
             f"HTTP {resposta.status_code}: "
-            f"{texto_erro}"
+            f"{resposta.text}"
         )
 
-    imagem_bytes = resposta.content
+    resultado = resposta.json()
 
-    if not imagem_bytes:
+    imagens = resultado.get("data", [])
+
+    if not imagens:
 
         raise RuntimeError(
-            "O Pollinations não retornou dados."
+            "A NVIDIA respondeu, mas não retornou "
+            "nenhuma imagem."
         )
 
+    imagem = imagens[0]
+
     # --------------------------------------------------------
-    # Determina extensão
+    # URL
     # --------------------------------------------------------
 
-    content_type = (
-        resposta.headers.get(
-            "Content-Type",
-            ""
-        ).lower()
-    )
+    url = imagem.get("url")
 
-    if "png" in content_type:
+    if url:
 
-        extensao = ".png"
+        imagem_resposta = requests.get(
+            url,
+            timeout=180
+        )
 
-    elif "webp" in content_type:
+        imagem_resposta.raise_for_status()
 
-        extensao = ".webp"
+        imagem_bytes = imagem_resposta.content
+
+    # --------------------------------------------------------
+    # BASE64
+    # --------------------------------------------------------
 
     else:
 
-        extensao = ".jpg"
+        b64 = imagem.get("b64_json")
+
+        if not b64:
+
+            raise RuntimeError(
+                "A resposta da NVIDIA não contém "
+                "URL nem b64_json."
+            )
+
+        imagem_bytes = base64.b64decode(b64)
 
     # --------------------------------------------------------
-    # Salva arquivo
+    # SALVAR
     # --------------------------------------------------------
 
     pasta = obter_pasta_imagens()
 
-    caminho = (
-        pasta /
-        f"ultima_imagem{extensao}"
-    )
+    caminho = pasta / "ultima_imagem.png"
 
-    with open(
-        caminho,
-        "wb"
-    ) as arquivo:
+    with open(caminho, "wb") as arquivo:
 
-        arquivo.write(
-            imagem_bytes
-        )
+        arquivo.write(imagem_bytes)
 
     return str(caminho)
 
 
 # ============================================================
-# 🖼️ GERAR IMAGEM
-# FALLBACK AUTOMÁTICO
+# 🖼️ GERAR IMAGEM — FALLBACK
 # ============================================================
 
 def gerar_imagem(prompt):
-    """
-    Tenta vários motores do Pollinations.
-
-    Se um motor falhar, tenta automaticamente
-    o próximo.
-    """
 
     if not prompt or not prompt.strip():
 
@@ -250,29 +204,15 @@ def gerar_imagem(prompt):
             "❌ O prompt da imagem está vazio."
         )
 
-    chave = obter_chave_pollinations()
-
-    if not chave:
-
-        return (
-            None,
-            "❌ A chave POLLINATIONS_API_KEY "
-            "não foi encontrada nos Secrets."
-        )
-
     erros = []
-
-    # --------------------------------------------------------
-    # Tenta cada motor
-    # --------------------------------------------------------
 
     for modelo in MOTORES_IMAGEM:
 
         try:
 
-            caminho = _gerar_com_pollinations(
-                prompt=prompt,
-                modelo=modelo
+            caminho = _gerar_com_nvidia(
+                prompt.strip(),
+                modelo
             )
 
             guardar_ultima_imagem(
@@ -284,30 +224,23 @@ def gerar_imagem(prompt):
 
             return (
                 caminho,
-                f"🖼️ Imagem gerada pelo motor {modelo}."
+                f"🖼️ Imagem gerada pela NVIDIA "
+                f"com {modelo}."
             )
 
         except Exception as erro:
 
-            mensagem = str(erro)
-
             erros.append(
-                f"{modelo}: {mensagem}"
+                f"{modelo}: {erro}"
             )
 
-            # Continua para o próximo motor.
             continue
-
-    # --------------------------------------------------------
-    # Todos falharam
-    # --------------------------------------------------------
 
     return (
         None,
-        "❌ Todos os motores de imagem "
-        "do Pollinations falharam.\n\n"
-        +
-        "\n\n".join(erros)
+        "❌ Todos os motores de imagem NVIDIA "
+        "falharam.\n\n"
+        + "\n\n".join(erros)
     )
 
 
@@ -316,42 +249,24 @@ def gerar_imagem(prompt):
 # ============================================================
 
 def mostrar_imagem(prompt):
-    """
-    Gera e mostra a imagem no Streamlit.
-    """
 
     with st.spinner(
         "🎨 Alex IA está criando sua imagem..."
     ):
 
-        imagem, mensagem = gerar_imagem(
-            prompt
-        )
+        imagem, mensagem = gerar_imagem(prompt)
 
     if imagem is None:
 
-        st.error(
-            mensagem
-        )
+        st.error(mensagem)
 
         return False
 
-    # --------------------------------------------------------
-    # Mostra imagem
-    # --------------------------------------------------------
-
     st.image(
         imagem,
-        caption=(
-            "🖼️ Imagem gerada pela "
-            "Alex IA Ultra"
-        ),
-        use_container_width=True
+        caption="🖼️ Imagem gerada pela Alex IA Ultra",
+        use_container_width=True,
     )
-
-    # --------------------------------------------------------
-    # Mostra motor utilizado
-    # --------------------------------------------------------
 
     motor = st.session_state.get(
         "ultimo_motor_imagem"
@@ -360,14 +275,14 @@ def mostrar_imagem(prompt):
     if motor:
 
         st.caption(
-            f"🎨 Motor utilizado: {motor}"
+            f"🎨 Motor utilizado: NVIDIA / {motor}"
         )
 
     return True
 
 
 # ============================================================
-# 🔎 ÚLTIMA IMAGEM
+# 🔎 ACESSO À ÚLTIMA IMAGEM
 # ============================================================
 
 def obter_ultima_imagem():
@@ -392,31 +307,20 @@ def obter_prompt_ultima_imagem():
     )
 
 
-def obter_motor_ultima_imagem():
-
-    return st.session_state.get(
-        "ultimo_motor_imagem",
-        ""
-    )
-
-
 # ============================================================
 # 🧹 LIMPAR ÚLTIMA IMAGEM
 # ============================================================
 
 def limpar_ultima_imagem():
 
-    chaves = [
+    for chave in [
         "ultima_imagem",
         "ultima_imagem_caminho",
         "ultimo_prompt_imagem",
         "ultimo_motor_imagem",
-    ]
-
-    for chave in chaves:
+    ]:
 
         st.session_state.pop(
             chave,
             None
     )
-        st.sidebar.info("🧪 GERENCIADOR DE IMAGEM NOVO CARREGADO")
