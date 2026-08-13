@@ -3,44 +3,36 @@
 # Criada por Geovani
 # ============================================================
 
-import io
+import base64
 import os
-import time
 from pathlib import Path
 
 import streamlit as st
-from PIL import Image
-from gradio_client import Client
 
 from servicos import criar_cliente_gemini
 
 
 # ============================================================
-# ⚙️ CONFIGURAÇÕES
+# 🎨 MOTORES DE IMAGEM
 # ============================================================
 
-# Motor principal atual
-SPACE_Z_IMAGE = "mrfakename/Z-Image-Turbo"
-
-# Motor de imagem do Gemini
-MODELO_GEMINI_IMAGEM = "gemini-3.1-flash-image"
+MOTORES_IMAGEM = [
+    "gemini-3.1-flash-image",
+    "gemini-3-pro-image",
+]
 
 
 # ============================================================
-# 📁 PASTA TEMPORÁRIA
+# 📁 PASTA DAS IMAGENS
 # ============================================================
 
 def obter_pasta_imagens():
 
-    pasta = (
-        Path(
-            os.environ.get(
-                "TMPDIR",
-                "/tmp"
-            )
+    pasta = Path(
+        os.path.join(
+            os.getcwd(),
+            "imagens_geradas"
         )
-        / "alex_ia_ultra"
-        / "imagens"
     )
 
     pasta.mkdir(
@@ -52,90 +44,35 @@ def obter_pasta_imagens():
 
 
 # ============================================================
-# 💾 GUARDAR IMAGEM
+# 💾 GUARDAR ÚLTIMA IMAGEM
 # ============================================================
 
-def guardar_imagem(
+def guardar_ultima_imagem(
     imagem,
-    prompt,
-    motor
+    prompt
 ):
-    """
-    Guarda a última imagem gerada
-    na sessão da Alex.
-    """
 
     try:
 
-        st.session_state.ultima_imagem = imagem
-
-        st.session_state.ultimo_prompt_imagem = prompt
-
-        st.session_state.ultimo_motor_imagem = motor
-
         caminho = None
 
-        # ----------------------------------------------------
-        # PIL Image
-        # ----------------------------------------------------
+        if isinstance(imagem, str):
 
-        if isinstance(
-            imagem,
-            Image.Image
-        ):
+            caminho = imagem
 
-            caminho = (
-                obter_pasta_imagens()
-                / "ultima_imagem.png"
-            )
-
-            imagem.save(
-                caminho,
-                format="PNG"
-            )
-
-        # ----------------------------------------------------
-        # Caminho de arquivo
-        # ----------------------------------------------------
-
-        elif isinstance(
-            imagem,
-            str
-        ):
-
-            if os.path.exists(imagem):
-
-                caminho = imagem
-
-                try:
-
-                    imagem_pil = Image.open(
-                        imagem
-                    )
-
-                    st.session_state.ultima_imagem = (
-                        imagem_pil
-                    )
-
-                except Exception:
-                    pass
-
-        # ----------------------------------------------------
-        # Objeto com .path
-        # ----------------------------------------------------
-
-        elif hasattr(
-            imagem,
-            "path"
-        ):
+        elif hasattr(imagem, "path"):
 
             caminho = imagem.path
 
-        st.session_state.ultima_imagem_caminho = (
-            str(caminho)
-            if caminho
-            else None
-        )
+        elif hasattr(imagem, "filename"):
+
+            caminho = imagem.filename
+
+        st.session_state.ultima_imagem = imagem
+
+        st.session_state.ultima_imagem_caminho = caminho
+
+        st.session_state.ultimo_prompt_imagem = prompt
 
         return True
 
@@ -143,296 +80,280 @@ def guardar_imagem(
 
         st.session_state.ultima_imagem = imagem
 
-        st.session_state.ultimo_prompt_imagem = prompt
-
-        st.session_state.ultimo_motor_imagem = motor
-
         st.session_state.ultima_imagem_caminho = None
+
+        st.session_state.ultimo_prompt_imagem = prompt
 
         return False
 
 
 # ============================================================
-# 🥇 MOTOR 1 — Z IMAGE TURBO
+# 🔍 OBTER DADOS DA IMAGEM
 # ============================================================
 
-def gerar_z_image(
-    prompt
-):
+def extrair_imagem_resposta(resposta):
+
     """
-    Tenta gerar uma imagem pelo
-    Z-Image-Turbo.
+    Procura uma imagem na resposta do Gemini.
     """
 
     try:
 
-        cliente = Client(
-            SPACE_Z_IMAGE
-        )
+        candidatos = []
 
-        resultado = cliente.predict(
-            prompt.strip(),
-            1024,
-            1024,
-            9,
-            42,
-            True,
-            api_name="/generate_image"
-        )
+        if hasattr(resposta, "candidates"):
 
-        if isinstance(
-            resultado,
-            tuple
-        ):
-
-            imagem = resultado[0]
-
-        else:
-
-            imagem = resultado
-
-        if not imagem:
-
-            raise RuntimeError(
-                "O Z-Image-Turbo não retornou imagem."
-            )
-
-        return (
-            imagem,
-            None
-        )
-
-    except Exception as erro:
-
-        return (
-            None,
-            str(erro)
-        )
-
-
-# ============================================================
-# 🥈 MOTOR 2 — GEMINI IMAGE
-# ============================================================
-
-def gerar_gemini_image(
-    prompt
-):
-    """
-    Tenta gerar imagem pelo Gemini.
-    """
-
-    try:
-
-        cliente = criar_cliente_gemini()
-
-        if cliente is None:
-
-            return (
-                None,
-                "Cliente Gemini indisponível."
-            )
-
-        resposta = cliente.models.generate_content(
-            model=MODELO_GEMINI_IMAGEM,
-            contents=prompt.strip(),
-            config={
-                "response_modalities": [
-                    "IMAGE"
-                ]
-            }
-        )
-
-        if not resposta:
-
-            return (
-                None,
-                "Gemini não retornou resposta."
-            )
-
-        candidatos = getattr(
-            resposta,
-            "candidates",
-            []
-        )
+            candidatos = resposta.candidates
 
         for candidato in candidatos:
 
-            conteudo = getattr(
+            content = getattr(
                 candidato,
                 "content",
                 None
             )
 
-            if not conteudo:
+            if content is None:
                 continue
 
             partes = getattr(
-                conteudo,
+                content,
                 "parts",
                 []
             )
 
             for parte in partes:
 
-                dados = getattr(
+                inline_data = getattr(
                     parte,
                     "inline_data",
                     None
                 )
 
-                if not dados:
-                    continue
+                if inline_data:
 
-                bytes_imagem = getattr(
-                    dados,
-                    "data",
-                    None
-                )
-
-                if not bytes_imagem:
-                    continue
-
-                imagem = Image.open(
-                    io.BytesIO(
-                        bytes_imagem
+                    dados = getattr(
+                        inline_data,
+                        "data",
+                        None
                     )
-                )
 
-                return (
-                    imagem,
-                    None
-                )
+                    mime_type = getattr(
+                        inline_data,
+                        "mime_type",
+                        "image/png"
+                    )
+
+                    if dados:
+
+                        return (
+                            dados,
+                            mime_type
+                        )
 
         return (
             None,
-            "Gemini terminou sem retornar imagem."
+            None
         )
 
-    except Exception as erro:
+    except Exception:
 
         return (
             None,
-            str(erro)
+            None
         )
 
 
 # ============================================================
-# 🔎 DETECTAR ERRO DE COTA
+# 💾 SALVAR BYTES DA IMAGEM
 # ============================================================
 
-def erro_de_cota(
-    mensagem
+def salvar_imagem_bytes(
+    dados,
+    mime_type="image/png"
 ):
-    """
-    Detecta erros conhecidos de limite/quota.
-    """
 
-    if not mensagem:
-        return False
+    try:
 
-    texto = str(
-        mensagem
-    ).lower()
+        pasta = obter_pasta_imagens()
 
-    palavras = (
-        "quota",
-        "zerogpu",
-        "resource_exhausted",
-        "rate limit",
-        "rate_limit",
-        "too many requests",
-        "exceeded",
-        "limit exceeded",
-        "429",
-    )
+        extensao = ".png"
 
-    return any(
-        palavra in texto
-        for palavra in palavras
-    )
+        if "jpeg" in mime_type:
+
+            extensao = ".jpg"
+
+        elif "webp" in mime_type:
+
+            extensao = ".webp"
+
+        nome = (
+            "alex_ia_imagem_"
+            + str(
+                len(
+                    list(
+                        pasta.glob("*")
+                    )
+                ) + 1
+            )
+            + extensao
+        )
+
+        caminho = pasta / nome
+
+        if isinstance(
+            dados,
+            str
+        ):
+
+            dados = base64.b64decode(
+                dados
+            )
+
+        with open(
+            caminho,
+            "wb"
+        ) as arquivo:
+
+            arquivo.write(
+                dados
+            )
+
+        if not caminho.exists():
+
+            return None
+
+        if caminho.stat().st_size == 0:
+
+            return None
+
+        return str(caminho)
+
+    except Exception:
+
+        return None
 
 
 # ============================================================
-# 🎯 GERADOR AUTOMÁTICO
+# 🖼️ GERAR COM GEMINI
 # ============================================================
 
-def gerar_imagem_automatica(
+def gerar_com_gemini(
+    cliente,
+    modelo,
     prompt
 ):
-    """
-    Tenta vários motores automaticamente.
 
-    Ordem:
+    resposta = cliente.models.generate_content(
+        model=modelo,
+        contents=prompt,
+    )
 
-    1. Z-Image-Turbo
-    2. Gemini Image
-    """
+    dados, mime_type = (
+        extrair_imagem_resposta(
+            resposta
+        )
+    )
+
+    if dados is None:
+
+        raise RuntimeError(
+            "O modelo terminou, "
+            "mas não retornou uma imagem."
+        )
+
+    caminho = salvar_imagem_bytes(
+        dados,
+        mime_type
+    )
+
+    if caminho is None:
+
+        raise RuntimeError(
+            "A imagem foi recebida, "
+            "mas não pôde ser salva."
+        )
+
+    return caminho
+
+
+# ============================================================
+# 🖼️ GERAR IMAGEM COM FALLBACK
+# ============================================================
+
+def gerar_imagem(prompt):
 
     if not prompt or not prompt.strip():
 
         return (
             None,
-            "❌ O prompt da imagem está vazio.",
-            None
+            "❌ O prompt da imagem está vazio."
         )
 
-    motores = [
-        (
-            "Z-Image-Turbo",
-            gerar_z_image
-        ),
-        (
-            "Gemini Image",
-            gerar_gemini_image
-        ),
-    ]
+    cliente = criar_cliente_gemini()
+
+    if cliente is None:
+
+        return (
+            None,
+            "❌ Não foi possível criar o cliente Gemini. "
+            "Verifique GEMINI_API_KEY nos Secrets."
+        )
 
     erros = []
 
-    for nome_motor, funcao in motores:
+    # ========================================================
+    # 🔄 TENTA OS MOTORES EM ORDEM
+    # ========================================================
 
-        st.info(
-            f"🎨 Tentando motor: {nome_motor}"
-        )
+    for modelo in MOTORES_IMAGEM:
 
-        imagem, erro = funcao(
-            prompt
-        )
+        try:
 
-        if imagem is not None:
-
-            guardar_imagem(
-                imagem,
-                prompt,
-                nome_motor
+            st.session_state.motor_imagem_atual = (
+                modelo
             )
 
-            return (
-                imagem,
-                None,
-                nome_motor
+            caminho = gerar_com_gemini(
+                cliente,
+                modelo,
+                prompt.strip()
             )
 
-        erros.append(
-            f"{nome_motor}: {erro}"
-        )
+            if caminho:
 
-        # ----------------------------------------------------
-        # Se falhou, tenta automaticamente o próximo.
-        # ----------------------------------------------------
+                return (
+                    caminho,
+                    f"Imagem gerada usando {modelo}."
+                )
 
-        continue
+        except Exception as erro:
 
-    mensagem = (
-        "❌ Todos os motores de imagem "
-        "disponíveis falharam.\n\n"
-        + "\n".join(erros)
+            mensagem_erro = str(
+                erro
+            )
+
+            erros.append(
+                f"{modelo}: {mensagem_erro}"
+            )
+
+            # Continua automaticamente
+            # para o próximo motor.
+            continue
+
+    # ========================================================
+    # ❌ TODOS FALHARAM
+    # ========================================================
+
+    detalhes = "\n\n".join(
+        erros
     )
 
     return (
         None,
-        mensagem,
-        None
+        "❌ Todos os motores de imagem "
+        "disponíveis falharam.\n\n"
+        + detalhes
     )
 
 
@@ -440,43 +361,77 @@ def gerar_imagem_automatica(
 # 🖼️ MOSTRAR IMAGEM
 # ============================================================
 
-def mostrar_imagem_automatica(
-    prompt
-):
-    """
-    Gera imagem usando fallback automático.
-    """
+def mostrar_imagem(prompt):
 
     with st.spinner(
-        "🎨 Alex IA está escolhendo "
-        "o melhor motor de imagem..."
+        "🎨 Alex IA está criando sua imagem..."
     ):
 
-        imagem, erro, motor = (
-            gerar_imagem_automatica(
+        caminho, mensagem = (
+            gerar_imagem(
                 prompt
             )
         )
 
-    if erro:
+    if caminho is None:
 
         st.error(
-            erro
+            mensagem
         )
 
         return False
 
+    # --------------------------------------------------------
+    # 🧠 Guarda a última imagem
+    # --------------------------------------------------------
+
+    guardar_ultima_imagem(
+        caminho,
+        prompt
+    )
+
+    # --------------------------------------------------------
+    # 🖼️ Mostra a imagem
+    # --------------------------------------------------------
+
     st.image(
-        imagem,
+        caminho,
         caption=(
-            "🖼️ Imagem gerada pela Alex IA Ultra "
-            f"• Motor: {motor}"
+            "🖼️ Imagem gerada pela Alex IA Ultra"
         ),
         use_container_width=True
     )
 
-    st.success(
-        f"✅ Imagem criada usando {motor}."
+    st.caption(
+        f"🎨 {mensagem}"
     )
+
+    # --------------------------------------------------------
+    # ⬇️ Download
+    # --------------------------------------------------------
+
+    try:
+
+        with open(
+            caminho,
+            "rb"
+        ) as arquivo:
+
+            st.download_button(
+                "⬇️ Baixar imagem",
+                data=arquivo.read(),
+                file_name="alex_ia_imagem.png",
+                mime="image/png",
+                key=(
+                    "download_imagem_"
+                    + str(
+                        hash(caminho)
+                    )
+                )
+            )
+
+    except Exception:
+
+        pass
 
     return True
