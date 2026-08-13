@@ -137,6 +137,7 @@ def _gerar_com_pollinations(
         "width": 1024,
         "height": 1024,
         "nologo": "true",
+        "key": chave,
     }
 
     headers = {
