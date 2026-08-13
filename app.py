@@ -810,9 +810,7 @@ if pergunta:
             "content": resposta_video
         })
 
-        # Não envia o pedido de vídeo para o chat normal do Gemini.
-        # O módulo de vídeo já processou a solicitação.
-        st.stop()
+        # Não envia o pe
 
     # --------------------------------------------------------
     # 💻 COMANDO DE CÓDIGO
