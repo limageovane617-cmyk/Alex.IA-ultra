@@ -82,8 +82,46 @@ def gerar_imagem(prompt):
 
 def guardar_ultima_imagem(imagem, prompt):
     """
-    Guarda a última imagem gerada na sessão.
+    Guarda a última imagem gerada para que a Alex
+    possa analisá-la posteriormente.
+    """
 
+    try:
+
+        caminho_imagem = None
+
+        # O Gradio normalmente retorna o caminho
+        # do arquivo gerado.
+        if isinstance(imagem, str):
+
+            caminho_imagem = imagem
+
+        # Alguns resultados podem vir como objetos
+        # que possuem o atributo path.
+        elif hasattr(imagem, "path"):
+
+            caminho_imagem = imagem.path
+
+        # Guarda o resultado original.
+        st.session_state.ultima_imagem = imagem
+
+        # Guarda também o caminho quando disponível.
+        st.session_state.ultima_imagem_caminho = (
+            caminho_imagem
+        )
+
+        st.session_state.ultimo_prompt_imagem = prompt
+
+        return True
+
+    except Exception as erro:
+
+        st.session_state.ultima_imagem = imagem
+        st.session_state.ultima_imagem_caminho = None
+        st.session_state.ultimo_prompt_imagem = prompt
+
+        return False
+        
     Isso permite que a Alex analise a imagem
     posteriormente.
     """
