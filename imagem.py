@@ -1,43 +1,36 @@
 # ============================================================
 # 🖼️ ALEX IA ULTRA — GERENCIADOR DE IMAGENS
-# Pollinations + fallback Gemini
+# NVIDIA NIM
 # Criado por Geovani
 # ============================================================
 
 import os
 from pathlib import Path
-from urllib.parse import quote
 
 import requests
 import streamlit as st
 
 
 # ============================================================
-# ⚙️ CONFIGURAÇÃO
+# ⚙️ CONFIGURAÇÃO NVIDIA
 # ============================================================
 
-POLLINATIONS_URL = "https://gen.pollinations.ai"
+NVIDIA_API_URL = (
+    "https://integrate.api.nvidia.com/v1/images/generations"
+)
 
-# A Alex tenta automaticamente os motores nesta ordem.
-MOTORES_IMAGEM = [
-    "flux",
-    "zimage",
-    "qwen-image",
-    "seedream",
-    "gptimage",
-    "nanobanana",
-]
+MODELO_IMAGEM = "black-forest-labs/FLUX.1-dev"
 
 
 # ============================================================
-# 🔐 CHAVE DO POLLINATIONS
+# 🔐 OBTER CHAVE NVIDIA
 # ============================================================
 
-def obter_chave_pollinations():
+def obter_chave_nvidia():
 
     try:
         chave = st.secrets.get(
-            "POLLINATIONS_API_KEY",
+            "NVIDIA_API_KEY",
             ""
         )
     except Exception:
@@ -45,7 +38,7 @@ def obter_chave_pollinations():
 
     if not chave:
         chave = os.environ.get(
-            "POLLINATIONS_API_KEY",
+            "NVIDIA_API_KEY",
             ""
         )
 
@@ -105,89 +98,117 @@ def guardar_ultima_imagem(
 
 
 # ============================================================
-# 🎨 GERAR COM POLLINATIONS
+# 🎨 GERAR IMAGEM COM NVIDIA
 # ============================================================
 
-def _gerar_com_pollinations(
-    prompt,
-    modelo
-):
+def gerar_imagem_nvidia(prompt):
 
-    chave = obter_chave_pollinations()
+    chave = obter_chave_nvidia()
 
     if not chave:
 
         raise RuntimeError(
-            "POLLINATIONS_API_KEY não encontrada "
+            "NVIDIA_API_KEY não encontrada "
             "nos Secrets do Streamlit."
         )
 
-    prompt_codificado = quote(
-        prompt.strip(),
-        safe=""
-    )
-
-    url = (
-        f"{POLLINATIONS_URL}/image/"
-        f"{prompt_codificado}"
-    )
-
-    parametros = {
-        "model": modelo,
-        "width": 1024,
-        "height": 1024,
-        "nologo": "true",
-        "key": chave,
-    }
-
     headers = {
         "Authorization": f"Bearer {chave}",
-        "Accept": "image/*",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
     }
 
-    resposta = requests.get(
-        url,
-        params=parametros,
+    dados = {
+        "model": MODELO_IMAGEM,
+        "prompt": prompt.strip(),
+        "width": 1024,
+        "height": 1024,
+        "steps": 30,
+        "cfg_scale": 5,
+        "seed": 0,
+    }
+
+    resposta = requests.post(
+        NVIDIA_API_URL,
         headers=headers,
+        json=dados,
         timeout=180,
     )
 
     if resposta.status_code != 200:
 
-        texto = resposta.text[:1500]
-
         raise RuntimeError(
-            f"HTTP {resposta.status_code}: {texto}"
+            f"NVIDIA HTTP {resposta.status_code}: "
+            f"{resposta.text[:2000]}"
         )
 
-    if not resposta.content:
+    resultado = resposta.json()
 
-        raise RuntimeError(
-            "O Pollinations não retornou "
-            "nenhuma imagem."
-        )
+    # ========================================================
+    # Tentar encontrar a imagem retornada
+    # ========================================================
 
-    content_type = (
-        resposta.headers
-        .get("Content-Type", "")
-        .lower()
+    data = resultado.get(
+        "data",
+        []
     )
 
-    if "png" in content_type:
+    if not data:
 
-        extensao = ".png"
+        raise RuntimeError(
+            "A NVIDIA respondeu, mas não retornou "
+            "dados de imagem."
+        )
 
-    elif "webp" in content_type:
+    primeiro = data[0]
 
-        extensao = ".webp"
+    # Algumas APIs retornam uma URL.
+    url_imagem = primeiro.get(
+        "url"
+    )
+
+    if url_imagem:
+
+        imagem_resposta = requests.get(
+            url_imagem,
+            timeout=180,
+        )
+
+        if imagem_resposta.status_code != 200:
+
+            raise RuntimeError(
+                "Não foi possível baixar "
+                "a imagem retornada pela NVIDIA."
+            )
+
+        bytes_imagem = (
+            imagem_resposta.content
+        )
 
     else:
 
-        extensao = ".jpg"
+        # Algumas respostas podem retornar
+        # a imagem em base64.
+        import base64
+
+        b64 = primeiro.get(
+            "b64_json"
+        )
+
+        if not b64:
+
+            raise RuntimeError(
+                "A resposta da NVIDIA não contém "
+                "URL nem imagem base64."
+            )
+
+        bytes_imagem = base64.b64decode(
+            b64
+        )
 
     caminho = (
         obter_pasta_imagens()
-        / f"ultima_imagem{extensao}"
+        / "ultima_imagem.png"
     )
 
     with open(
@@ -196,149 +217,14 @@ def _gerar_com_pollinations(
     ) as arquivo:
 
         arquivo.write(
-            resposta.content
+            bytes_imagem
         )
 
     return str(caminho)
 
 
 # ============================================================
-# 🤖 FALLBACK GEMINI
-# ============================================================
-
-def _gerar_com_gemini(prompt):
-
-    try:
-
-        from google.genai import types
-
-        from servicos import (
-            criar_cliente_gemini
-        )
-
-        cliente = criar_cliente_gemini()
-
-        if cliente is None:
-
-            raise RuntimeError(
-                "Cliente Gemini indisponível."
-            )
-
-        modelos_gemini = [
-            "gemini-3.1-flash-image",
-            "gemini-2.5-flash-image",
-        ]
-
-        erros = []
-
-        for modelo in modelos_gemini:
-
-            try:
-
-                resposta = (
-                    cliente.models.generate_content(
-                        model=modelo,
-                        contents=prompt.strip(),
-                        config=(
-                            types.GenerateContentConfig(
-                                response_modalities=[
-                                    "TEXT",
-                                    "IMAGE"
-                                ]
-                            )
-                        ),
-                    )
-                )
-
-                candidatos = (
-                    getattr(
-                        resposta,
-                        "candidates",
-                        None
-                    )
-                    or []
-                )
-
-                for candidato in candidatos:
-
-                    conteudo = getattr(
-                        candidato,
-                        "content",
-                        None
-                    )
-
-                    if not conteudo:
-                        continue
-
-                    partes = (
-                        getattr(
-                            conteudo,
-                            "parts",
-                            None
-                        )
-                        or []
-                    )
-
-                    for parte in partes:
-
-                        dados = getattr(
-                            parte,
-                            "inline_data",
-                            None
-                        )
-
-                        if dados is None:
-                            continue
-
-                        imagem_bytes = getattr(
-                            dados,
-                            "data",
-                            None
-                        )
-
-                        if not imagem_bytes:
-                            continue
-
-                        caminho = (
-                            obter_pasta_imagens()
-                            / "ultima_imagem_gemini.png"
-                        )
-
-                        with open(
-                            caminho,
-                            "wb"
-                        ) as arquivo:
-
-                            arquivo.write(
-                                imagem_bytes
-                            )
-
-                        return str(caminho)
-
-                erros.append(
-                    f"{modelo}: "
-                    "não retornou imagem."
-                )
-
-            except Exception as erro:
-
-                erros.append(
-                    f"{modelo}: {erro}"
-                )
-
-        raise RuntimeError(
-            " | ".join(erros)
-        )
-
-    except Exception as erro:
-
-        raise RuntimeError(
-            str(erro)
-        )
-
-
-# ============================================================
-# 🖼️ GERADOR AUTOMÁTICO
+# 🖼️ GERADOR PRINCIPAL
 # ============================================================
 
 def gerar_imagem(prompt):
@@ -350,68 +236,9 @@ def gerar_imagem(prompt):
             "❌ O prompt da imagem está vazio."
         )
 
-    erros = []
-
-    # ========================================================
-    # 🌸 POLLINATIONS
-    # ========================================================
-
-    chave = obter_chave_pollinations()
-
-    if chave:
-
-        for modelo in MOTORES_IMAGEM:
-
-            try:
-
-                caminho = (
-                    _gerar_com_pollinations(
-                        prompt=prompt,
-                        modelo=modelo
-                    )
-                )
-
-                guardar_ultima_imagem(
-                    imagem=caminho,
-                    prompt=prompt,
-                    caminho=caminho,
-                    motor=(
-                        f"Pollinations / "
-                        f"{modelo}"
-                    ),
-                )
-
-                return (
-                    caminho,
-                    (
-                        "🖼️ Imagem gerada pelo "
-                        f"Pollinations usando {modelo}."
-                    )
-                )
-
-            except Exception as erro:
-
-                erros.append(
-                    f"Pollinations / "
-                    f"{modelo}: {erro}"
-                )
-
-                continue
-
-    else:
-
-        erros.append(
-            "Pollinations: "
-            "POLLINATIONS_API_KEY não configurada."
-        )
-
-    # ========================================================
-    # 🤖 GEMINI — ÚLTIMO RECURSO
-    # ========================================================
-
     try:
 
-        caminho = _gerar_com_gemini(
+        caminho = gerar_imagem_nvidia(
             prompt
         )
 
@@ -419,32 +246,26 @@ def gerar_imagem(prompt):
             imagem=caminho,
             prompt=prompt,
             caminho=caminho,
-            motor="Gemini (fallback)",
+            motor=(
+                "NVIDIA NIM / "
+                f"{MODELO_IMAGEM}"
+            ),
         )
 
         return (
             caminho,
-            "🖼️ Imagem gerada pelo Gemini."
+            "🖼️ Imagem gerada pela NVIDIA."
         )
 
     except Exception as erro:
 
-        erros.append(
-            f"Gemini: {erro}"
+        return (
+            None,
+            (
+                "❌ Erro ao gerar imagem pela NVIDIA:\n\n"
+                f"{erro}"
+            )
         )
-
-    # ========================================================
-    # ❌ TODOS FALHARAM
-    # ========================================================
-
-    return (
-        None,
-        (
-            "❌ Todos os motores de imagem "
-            "disponíveis falharam.\n\n"
-            + "\n\n".join(erros)
-        )
-    )
 
 
 # ============================================================
@@ -457,8 +278,8 @@ def mostrar_imagem(prompt):
         "🎨 Alex IA está criando sua imagem..."
     ):
 
-        imagem, mensagem = (
-            gerar_imagem(prompt)
+        imagem, mensagem = gerar_imagem(
+            prompt
         )
 
     if imagem is None:
@@ -492,7 +313,7 @@ def mostrar_imagem(prompt):
 
 
 # ============================================================
-# 🔎 ÚLTIMA IMAGEM
+# 🔎 ACESSO À ÚLTIMA IMAGEM
 # ============================================================
 
 def obter_ultima_imagem():
@@ -526,7 +347,7 @@ def obter_motor_ultima_imagem():
 
 
 # ============================================================
-# 🧹 LIMPAR
+# 🧹 LIMPAR ÚLTIMA IMAGEM
 # ============================================================
 
 def limpar_ultima_imagem():
@@ -543,4 +364,4 @@ def limpar_ultima_imagem():
         st.session_state.pop(
             chave,
             None
-                    )
+        )
