@@ -10,6 +10,8 @@ from pathlib import Path
 import requests
 import streamlit as st
 
+st.sidebar.error("🔥 GERENCIADOR NVIDIA NOVO — TESTE 123")
+
 
 # ============================================================
 # ⚙️ CONFIGURAÇÃO NVIDIA
