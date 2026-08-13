@@ -16,7 +16,7 @@ import streamlit as st
 # ============================================================
 
 NVIDIA_API_URL = (
-    "https://integrate.api.nvidia.com/v1/images/generations"
+    "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-dev"
 )
 
 MODELO_IMAGEM = "black-forest-labs/FLUX.1-dev"
