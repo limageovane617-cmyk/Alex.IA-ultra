@@ -1,132 +1,73 @@
 # ============================================================
-# 🖼️ ALEX IA ULTRA — GERAÇÃO DE IMAGENS
-# Criada por Geovani
+# 🖼️ ALEX IA ULTRA — GERENCIADOR DE IMAGENS
+# Pollinations + fallback Gemini
+# Criado por Geovani
 # ============================================================
 
-import io
 import os
+from pathlib import Path
+from urllib.parse import quote
 
+import requests
 import streamlit as st
-from PIL import Image
-
-from servicos import criar_cliente_gemini
 
 
 # ============================================================
-# 🎨 CONFIGURAÇÃO DO MOTOR
+# ⚙️ CONFIGURAÇÃO
 # ============================================================
 
-MODELO_IMAGEM = "gemini-3.1-flash-image"
+POLLINATIONS_URL = "https://gen.pollinations.ai"
+
+# A Alex tenta automaticamente os motores nesta ordem.
+MOTORES_IMAGEM = [
+    "flux",
+    "zimage",
+    "qwen-image",
+    "seedream",
+    "gptimage",
+    "nanobanana",
+]
 
 
 # ============================================================
-# 🖼️ GERAR IMAGEM
+# 🔐 CHAVE DO POLLINATIONS
 # ============================================================
 
-def gerar_imagem(prompt):
-    """
-    Gera uma imagem usando o Gemini 3.1 Flash Image.
-    """
-
-    if not prompt or not prompt.strip():
-
-        return (
-            None,
-            "❌ O prompt da imagem está vazio."
-        )
+def obter_chave_pollinations():
 
     try:
+        chave = st.secrets.get(
+            "POLLINATIONS_API_KEY",
+            ""
+        )
+    except Exception:
+        chave = ""
 
-        cliente = criar_cliente_gemini()
-
-        if cliente is None:
-
-            return (
-                None,
-                "❌ Não foi possível conectar ao Gemini. "
-                "Verifique GEMINI_API_KEY nos Secrets."
-            )
-
-        resposta = cliente.models.generate_content(
-            model=MODELO_IMAGEM,
-            contents=prompt.strip(),
-            config={
-                "response_modalities": ["IMAGE"],
-            }
+    if not chave:
+        chave = os.environ.get(
+            "POLLINATIONS_API_KEY",
+            ""
         )
 
-        if not resposta or not resposta.candidates:
+    return str(chave).strip()
 
-            return (
-                None,
-                "❌ O Gemini não retornou uma resposta."
-            )
 
-        # ----------------------------------------------------
-        # 🔎 Procurar a imagem na resposta
-        # ----------------------------------------------------
+# ============================================================
+# 📁 PASTA DAS IMAGENS
+# ============================================================
 
-        for candidato in resposta.candidates:
+def obter_pasta_imagens():
 
-            conteudo = getattr(
-                candidato,
-                "content",
-                None
-            )
+    pasta = Path(
+        "/tmp/alex_ia_ultra_imagens"
+    )
 
-            if not conteudo:
-                continue
+    pasta.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
-            partes = getattr(
-                conteudo,
-                "parts",
-                []
-            )
-
-            for parte in partes:
-
-                dados_imagem = getattr(
-                    parte,
-                    "inline_data",
-                    None
-                )
-
-                if dados_imagem:
-
-                    mime_type = getattr(
-                        dados_imagem,
-                        "mime_type",
-                        "image/png"
-                    )
-
-                    dados = getattr(
-                        dados_imagem,
-                        "data",
-                        None
-                    )
-
-                    if dados:
-
-                        imagem = Image.open(
-                            io.BytesIO(dados)
-                        )
-
-                        return (
-                            imagem,
-                            None
-                        )
-
-        return (
-            None,
-            "❌ O Gemini terminou, mas não retornou uma imagem."
-        )
-
-    except Exception as erro:
-
-        return (
-            None,
-            f"❌ Erro ao gerar imagem: {erro}"
-        )
+    return pasta
 
 
 # ============================================================
@@ -135,62 +76,374 @@ def gerar_imagem(prompt):
 
 def guardar_ultima_imagem(
     imagem,
-    prompt
+    prompt,
+    caminho=None,
+    motor=None
 ):
-    """
-    Guarda a última imagem gerada na sessão.
-
-    Isso permite que a Alex possa analisar
-    posteriormente a imagem criada.
-    """
 
     try:
 
-        # Guarda a imagem diretamente.
         st.session_state.ultima_imagem = imagem
 
-        # Guarda o prompt utilizado.
-        st.session_state.ultimo_prompt_imagem = prompt
+        st.session_state.ultima_imagem_caminho = (
+            caminho
+        )
 
-        # ----------------------------------------------------
-        # 💾 Salvar também em arquivo temporário
-        # ----------------------------------------------------
+        st.session_state.ultimo_prompt_imagem = (
+            prompt
+        )
 
-        caminho = None
-
-        if isinstance(imagem, Image.Image):
-
-            pasta = os.path.join(
-                "/tmp",
-                "alex_ia_ultra"
-            )
-
-            os.makedirs(
-                pasta,
-                exist_ok=True
-            )
-
-            caminho = os.path.join(
-                pasta,
-                "ultima_imagem.png"
-            )
-
-            imagem.save(
-                caminho,
-                format="PNG"
-            )
-
-        st.session_state.ultima_imagem_caminho = caminho
+        st.session_state.ultimo_motor_imagem = (
+            motor
+        )
 
         return True
 
     except Exception:
 
-        st.session_state.ultima_imagem = imagem
-        st.session_state.ultimo_prompt_imagem = prompt
-        st.session_state.ultima_imagem_caminho = None
-
         return False
+
+
+# ============================================================
+# 🎨 GERAR COM POLLINATIONS
+# ============================================================
+
+def _gerar_com_pollinations(
+    prompt,
+    modelo
+):
+
+    chave = obter_chave_pollinations()
+
+    if not chave:
+
+        raise RuntimeError(
+            "POLLINATIONS_API_KEY não encontrada "
+            "nos Secrets do Streamlit."
+        )
+
+    prompt_codificado = quote(
+        prompt.strip(),
+        safe=""
+    )
+
+    url = (
+        f"{POLLINATIONS_URL}/image/"
+        f"{prompt_codificado}"
+    )
+
+    parametros = {
+        "model": modelo,
+        "width": 1024,
+        "height": 1024,
+        "nologo": "true",
+    }
+
+    headers = {
+        "Authorization": f"Bearer {chave}",
+        "Accept": "image/*",
+    }
+
+    resposta = requests.get(
+        url,
+        params=parametros,
+        headers=headers,
+        timeout=180,
+    )
+
+    if resposta.status_code != 200:
+
+        texto = resposta.text[:1500]
+
+        raise RuntimeError(
+            f"HTTP {resposta.status_code}: {texto}"
+        )
+
+    if not resposta.content:
+
+        raise RuntimeError(
+            "O Pollinations não retornou "
+            "nenhuma imagem."
+        )
+
+    content_type = (
+        resposta.headers
+        .get("Content-Type", "")
+        .lower()
+    )
+
+    if "png" in content_type:
+
+        extensao = ".png"
+
+    elif "webp" in content_type:
+
+        extensao = ".webp"
+
+    else:
+
+        extensao = ".jpg"
+
+    caminho = (
+        obter_pasta_imagens()
+        / f"ultima_imagem{extensao}"
+    )
+
+    with open(
+        caminho,
+        "wb"
+    ) as arquivo:
+
+        arquivo.write(
+            resposta.content
+        )
+
+    return str(caminho)
+
+
+# ============================================================
+# 🤖 FALLBACK GEMINI
+# ============================================================
+
+def _gerar_com_gemini(prompt):
+
+    try:
+
+        from google.genai import types
+
+        from servicos import (
+            criar_cliente_gemini
+        )
+
+        cliente = criar_cliente_gemini()
+
+        if cliente is None:
+
+            raise RuntimeError(
+                "Cliente Gemini indisponível."
+            )
+
+        modelos_gemini = [
+            "gemini-3.1-flash-image",
+            "gemini-2.5-flash-image",
+        ]
+
+        erros = []
+
+        for modelo in modelos_gemini:
+
+            try:
+
+                resposta = (
+                    cliente.models.generate_content(
+                        model=modelo,
+                        contents=prompt.strip(),
+                        config=(
+                            types.GenerateContentConfig(
+                                response_modalities=[
+                                    "TEXT",
+                                    "IMAGE"
+                                ]
+                            )
+                        ),
+                    )
+                )
+
+                candidatos = (
+                    getattr(
+                        resposta,
+                        "candidates",
+                        None
+                    )
+                    or []
+                )
+
+                for candidato in candidatos:
+
+                    conteudo = getattr(
+                        candidato,
+                        "content",
+                        None
+                    )
+
+                    if not conteudo:
+                        continue
+
+                    partes = (
+                        getattr(
+                            conteudo,
+                            "parts",
+                            None
+                        )
+                        or []
+                    )
+
+                    for parte in partes:
+
+                        dados = getattr(
+                            parte,
+                            "inline_data",
+                            None
+                        )
+
+                        if dados is None:
+                            continue
+
+                        imagem_bytes = getattr(
+                            dados,
+                            "data",
+                            None
+                        )
+
+                        if not imagem_bytes:
+                            continue
+
+                        caminho = (
+                            obter_pasta_imagens()
+                            / "ultima_imagem_gemini.png"
+                        )
+
+                        with open(
+                            caminho,
+                            "wb"
+                        ) as arquivo:
+
+                            arquivo.write(
+                                imagem_bytes
+                            )
+
+                        return str(caminho)
+
+                erros.append(
+                    f"{modelo}: "
+                    "não retornou imagem."
+                )
+
+            except Exception as erro:
+
+                erros.append(
+                    f"{modelo}: {erro}"
+                )
+
+        raise RuntimeError(
+            " | ".join(erros)
+        )
+
+    except Exception as erro:
+
+        raise RuntimeError(
+            str(erro)
+        )
+
+
+# ============================================================
+# 🖼️ GERADOR AUTOMÁTICO
+# ============================================================
+
+def gerar_imagem(prompt):
+
+    if not prompt or not prompt.strip():
+
+        return (
+            None,
+            "❌ O prompt da imagem está vazio."
+        )
+
+    erros = []
+
+    # ========================================================
+    # 🌸 POLLINATIONS
+    # ========================================================
+
+    chave = obter_chave_pollinations()
+
+    if chave:
+
+        for modelo in MOTORES_IMAGEM:
+
+            try:
+
+                caminho = (
+                    _gerar_com_pollinations(
+                        prompt=prompt,
+                        modelo=modelo
+                    )
+                )
+
+                guardar_ultima_imagem(
+                    imagem=caminho,
+                    prompt=prompt,
+                    caminho=caminho,
+                    motor=(
+                        f"Pollinations / "
+                        f"{modelo}"
+                    ),
+                )
+
+                return (
+                    caminho,
+                    (
+                        "🖼️ Imagem gerada pelo "
+                        f"Pollinations usando {modelo}."
+                    )
+                )
+
+            except Exception as erro:
+
+                erros.append(
+                    f"Pollinations / "
+                    f"{modelo}: {erro}"
+                )
+
+                continue
+
+    else:
+
+        erros.append(
+            "Pollinations: "
+            "POLLINATIONS_API_KEY não configurada."
+        )
+
+    # ========================================================
+    # 🤖 GEMINI — ÚLTIMO RECURSO
+    # ========================================================
+
+    try:
+
+        caminho = _gerar_com_gemini(
+            prompt
+        )
+
+        guardar_ultima_imagem(
+            imagem=caminho,
+            prompt=prompt,
+            caminho=caminho,
+            motor="Gemini (fallback)",
+        )
+
+        return (
+            caminho,
+            "🖼️ Imagem gerada pelo Gemini."
+        )
+
+    except Exception as erro:
+
+        erros.append(
+            f"Gemini: {erro}"
+        )
+
+    # ========================================================
+    # ❌ TODOS FALHARAM
+    # ========================================================
+
+    return (
+        None,
+        (
+            "❌ Todos os motores de imagem "
+            "disponíveis falharam.\n\n"
+            + "\n\n".join(erros)
+        )
+    )
 
 
 # ============================================================
@@ -198,43 +451,95 @@ def guardar_ultima_imagem(
 # ============================================================
 
 def mostrar_imagem(prompt):
-    """
-    Gera, guarda e mostra a imagem no Streamlit.
-    """
 
     with st.spinner(
         "🎨 Alex IA está criando sua imagem..."
     ):
 
-        imagem, erro = gerar_imagem(
-            prompt
+        imagem, mensagem = (
+            gerar_imagem(prompt)
         )
 
-    if erro:
+    if imagem is None:
 
         st.error(
-            erro
+            mensagem
         )
 
         return False
 
-    # --------------------------------------------------------
-    # 💾 Guardar imagem
-    # --------------------------------------------------------
-
-    guardar_ultima_imagem(
-        imagem,
-        prompt
-    )
-
-    # --------------------------------------------------------
-    # 🖼️ Mostrar imagem
-    # --------------------------------------------------------
-
     st.image(
         imagem,
-        caption="🖼️ Imagem gerada pela Alex IA Ultra",
-        use_container_width=True
+        caption=(
+            "🖼️ Imagem gerada pela "
+            "Alex IA Ultra"
+        ),
+        use_container_width=True,
     )
 
+    motor = st.session_state.get(
+        "ultimo_motor_imagem"
+    )
+
+    if motor:
+
+        st.caption(
+            f"🎨 Motor utilizado: {motor}"
+        )
+
     return True
+
+
+# ============================================================
+# 🔎 ÚLTIMA IMAGEM
+# ============================================================
+
+def obter_ultima_imagem():
+
+    return st.session_state.get(
+        "ultima_imagem"
+    )
+
+
+def obter_caminho_ultima_imagem():
+
+    return st.session_state.get(
+        "ultima_imagem_caminho"
+    )
+
+
+def obter_prompt_ultima_imagem():
+
+    return st.session_state.get(
+        "ultimo_prompt_imagem",
+        ""
+    )
+
+
+def obter_motor_ultima_imagem():
+
+    return st.session_state.get(
+        "ultimo_motor_imagem",
+        ""
+    )
+
+
+# ============================================================
+# 🧹 LIMPAR
+# ============================================================
+
+def limpar_ultima_imagem():
+
+    chaves = [
+        "ultima_imagem",
+        "ultima_imagem_caminho",
+        "ultimo_prompt_imagem",
+        "ultimo_motor_imagem",
+    ]
+
+    for chave in chaves:
+
+        st.session_state.pop(
+            chave,
+            None
+                    )
