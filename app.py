@@ -16,6 +16,12 @@ st.sidebar.success("✅ APP NOVO CARREGADO — NVIDIA")
 
 from gerenciador_imagem import mostrar_imagem
 
+import gerenciador_imagem
+
+st.sidebar.info(
+    f"🧪 Gerenciador carregado de:\n{gerenciador_imagem.__file__}"
+)
+
 from config_ultra import (
     SYSTEM_PROMPT,
     GEMINI_MODEL,
