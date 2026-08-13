@@ -1,11 +1,13 @@
 # ============================================================
 # 🖼️ ALEX IA ULTRA — GERENCIADOR DE IMAGENS
+# Pollinations API
 # Criado por Geovani
 # ============================================================
 
 import os
-import uuid
+import re
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 import streamlit as st
@@ -15,20 +17,64 @@ import streamlit as st
 # ⚙️ CONFIGURAÇÃO
 # ============================================================
 
-# Hugging Face
-HF_TOKEN = os.getenv("HF_TOKEN", "")
+POLLINATIONS_URL = "https://gen.pollinations.ai"
 
-# Pollinations
-POLLINATIONS_API_KEY = os.getenv(
-    "POLLINATIONS_API_KEY",
-    ""
-)
+# Modelos de imagem.
+# Se um falhar, o próximo será tentado automaticamente.
+MOTORES_IMAGEM = [
+    "flux",
+    "zimage",
+    "qwen-image",
+    "seedream",
+    "gptimage",
+    "nanobanana",
+]
 
-# Modelo usado pelo Hugging Face
-HF_MODEL = os.getenv(
-    "HF_IMAGE_MODEL",
-    "black-forest-labs/FLUX.1-schnell"
-)
+
+# ============================================================
+# 🔐 OBTER CHAVE
+# ============================================================
+
+def obter_chave_pollinations():
+    """
+    Obtém a chave do Streamlit Secrets ou variável de ambiente.
+
+    A chave NÃO fica dentro do código.
+    """
+
+    try:
+        chave = st.secrets.get(
+            "POLLINATIONS_API_KEY",
+            ""
+        )
+    except Exception:
+        chave = ""
+
+    if not chave:
+        chave = os.environ.get(
+            "POLLINATIONS_API_KEY",
+            ""
+        )
+
+    return str(chave).strip()
+
+
+# ============================================================
+# 📁 PASTA DAS IMAGENS
+# ============================================================
+
+def obter_pasta_imagens():
+
+    pasta = Path(
+        "/tmp/alex_ia_ultra_imagens"
+    )
+
+    pasta.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    return pasta
 
 
 # ============================================================
@@ -41,7 +87,9 @@ def guardar_ultima_imagem(
     caminho=None,
     motor=None
 ):
-    """Guarda a última imagem para análise posterior."""
+    """
+    Guarda informações da última imagem gerada.
+    """
 
     try:
 
@@ -67,136 +115,107 @@ def guardar_ultima_imagem(
 
 
 # ============================================================
-# 📁 PASTA DAS IMAGENS
+# 🎨 GERAR IMAGEM COM POLLINATIONS
 # ============================================================
 
-def obter_pasta_imagens():
+def _gerar_com_pollinations(
+    prompt,
+    modelo
+):
+    """
+    Gera uma imagem através da API oficial
+    do Pollinations.
+    """
 
-    pasta = Path(
-        os.path.join(
-            "/tmp",
-            "alex_ia_ultra_imagens"
-        )
-    )
+    chave = obter_chave_pollinations()
 
-    pasta.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    return pasta
-
-
-# ============================================================
-# 🎨 GERAR COM HUGGING FACE
-# ============================================================
-
-def _gerar_com_huggingface(prompt):
-
-    if not HF_TOKEN:
+    if not chave:
 
         raise RuntimeError(
-            "HF_TOKEN não configurado."
+            "POLLINATIONS_API_KEY não configurada "
+            "nos Secrets do Streamlit."
         )
 
-    try:
-
-        from huggingface_hub import InferenceClient
-
-    except Exception as erro:
-
-        raise RuntimeError(
-            "O pacote huggingface_hub não está instalado."
-        ) from erro
-
-    cliente = InferenceClient(
-        provider="auto",
-        api_key=HF_TOKEN
+    prompt_codificado = quote(
+        prompt.strip(),
+        safe=""
     )
-
-    imagem = cliente.text_to_image(
-        prompt,
-        model=HF_MODEL
-    )
-
-    if imagem is None:
-
-        raise RuntimeError(
-            "Hugging Face não retornou uma imagem."
-        )
-
-    pasta = obter_pasta_imagens()
-
-    caminho = (
-        pasta /
-        f"imagem_{uuid.uuid4().hex}.png"
-    )
-
-    imagem.save(
-        str(caminho)
-    )
-
-    return str(caminho)
-
-
-# ============================================================
-# 🌸 GERAR COM POLLINATIONS
-# ============================================================
-
-def _gerar_com_pollinations(prompt):
-
-    if not POLLINATIONS_API_KEY:
-
-        raise RuntimeError(
-            "POLLINATIONS_API_KEY não configurada."
-        )
 
     url = (
-        "https://gen.pollinations.ai/image/"
-        + requests.utils.quote(
-            prompt,
-            safe=""
-        )
+        f"{POLLINATIONS_URL}/image/"
+        f"{prompt_codificado}"
     )
 
     parametros = {
-        "model": "flux",
+        "model": modelo,
         "width": 1024,
         "height": 1024,
         "nologo": "true",
     }
 
-    cabecalhos = {
-        "Authorization":
-            f"Bearer {POLLINATIONS_API_KEY}"
+    headers = {
+        "Authorization": f"Bearer {chave}"
     }
 
     resposta = requests.get(
         url,
         params=parametros,
-        headers=cabecalhos,
+        headers=headers,
         timeout=180
     )
 
     if resposta.status_code != 200:
 
+        texto_erro = resposta.text
+
+        if len(texto_erro) > 1500:
+            texto_erro = texto_erro[:1500]
+
         raise RuntimeError(
-            f"Pollinations retornou "
             f"HTTP {resposta.status_code}: "
-            f"{resposta.text[:500]}"
+            f"{texto_erro}"
         )
 
-    if not resposta.content:
+    imagem_bytes = resposta.content
+
+    if not imagem_bytes:
 
         raise RuntimeError(
-            "Pollinations não retornou dados."
+            "O Pollinations não retornou dados."
         )
+
+    # --------------------------------------------------------
+    # Determina extensão
+    # --------------------------------------------------------
+
+    content_type = (
+        resposta.headers.get(
+            "Content-Type",
+            ""
+        ).lower()
+    )
+
+    if "png" in content_type:
+
+        extensao = ".png"
+
+    elif "webp" in content_type:
+
+        extensao = ".webp"
+
+    else:
+
+        extensao = ".jpg"
+
+    # --------------------------------------------------------
+    # Salva arquivo
+    # --------------------------------------------------------
 
     pasta = obter_pasta_imagens()
 
     caminho = (
         pasta /
-        f"imagem_{uuid.uuid4().hex}.png"
+        f"ultima_imagem{extensao}"
     )
 
     with open(
@@ -205,7 +224,7 @@ def _gerar_com_pollinations(prompt):
     ) as arquivo:
 
         arquivo.write(
-            resposta.content
+            imagem_bytes
         )
 
     return str(caminho)
@@ -213,20 +232,15 @@ def _gerar_com_pollinations(prompt):
 
 # ============================================================
 # 🖼️ GERAR IMAGEM
+# FALLBACK AUTOMÁTICO
 # ============================================================
 
 def gerar_imagem(prompt):
-
     """
-    Sistema automático de geração.
+    Tenta vários motores do Pollinations.
 
-    Ordem:
-
-    1️⃣ Hugging Face
-    2️⃣ Pollinations
-
-    Se um motor falhar, o próximo é
-    acionado automaticamente.
+    Se um motor falhar, tenta automaticamente
+    o próximo.
     """
 
     if not prompt or not prompt.strip():
@@ -236,80 +250,64 @@ def gerar_imagem(prompt):
             "❌ O prompt da imagem está vazio."
         )
 
-    prompt = prompt.strip()
+    chave = obter_chave_pollinations()
+
+    if not chave:
+
+        return (
+            None,
+            "❌ A chave POLLINATIONS_API_KEY "
+            "não foi encontrada nos Secrets."
+        )
 
     erros = []
 
+    # --------------------------------------------------------
+    # Tenta cada motor
+    # --------------------------------------------------------
 
-    # ========================================================
-    # 1️⃣ HUGGING FACE
-    # ========================================================
+    for modelo in MOTORES_IMAGEM:
 
-    try:
+        try:
 
-        caminho = _gerar_com_huggingface(
-            prompt
-        )
+            caminho = _gerar_com_pollinations(
+                prompt=prompt,
+                modelo=modelo
+            )
 
-        guardar_ultima_imagem(
-            imagem=caminho,
-            prompt=prompt,
-            caminho=caminho,
-            motor="Hugging Face"
-        )
+            guardar_ultima_imagem(
+                imagem=caminho,
+                prompt=prompt,
+                caminho=caminho,
+                motor=modelo
+            )
 
-        return (
-            caminho,
-            "🖼️ Imagem gerada pelo Hugging Face."
-        )
+            return (
+                caminho,
+                f"🖼️ Imagem gerada pelo motor {modelo}."
+            )
 
-    except Exception as erro:
+        except Exception as erro:
 
-        erros.append(
-            "Hugging Face: "
-            + str(erro)
-        )
+            mensagem = str(erro)
 
+            erros.append(
+                f"{modelo}: {mensagem}"
+            )
 
-    # ========================================================
-    # 2️⃣ POLLINATIONS
-    # ========================================================
+            # Continua para o próximo motor.
+            continue
 
-    try:
-
-        caminho = _gerar_com_pollinations(
-            prompt
-        )
-
-        guardar_ultima_imagem(
-            imagem=caminho,
-            prompt=prompt,
-            caminho=caminho,
-            motor="Pollinations"
-        )
-
-        return (
-            caminho,
-            "🖼️ Imagem gerada pelo Pollinations."
-        )
-
-    except Exception as erro:
-
-        erros.append(
-            "Pollinations: "
-            + str(erro)
-        )
-
-
-    # ========================================================
-    # ❌ TODOS FALHARAM
-    # ========================================================
+    # --------------------------------------------------------
+    # Todos falharam
+    # --------------------------------------------------------
 
     return (
         None,
         "❌ Todos os motores de imagem "
-        "disponíveis falharam.\n\n"
-        + "\n\n".join(erros)
+        "do Pollinations falharam.\n\n"
+        +
+        "\n\n".join(erros)
     )
 
 
@@ -318,6 +316,9 @@ def gerar_imagem(prompt):
 # ============================================================
 
 def mostrar_imagem(prompt):
+    """
+    Gera e mostra a imagem no Streamlit.
+    """
 
     with st.spinner(
         "🎨 Alex IA está criando sua imagem..."
@@ -335,16 +336,22 @@ def mostrar_imagem(prompt):
 
         return False
 
+    # --------------------------------------------------------
+    # Mostra imagem
+    # --------------------------------------------------------
 
     st.image(
         imagem,
         caption=(
-            "🖼️ Imagem gerada "
-            "pela Alex IA Ultra"
+            "🖼️ Imagem gerada pela "
+            "Alex IA Ultra"
         ),
         use_container_width=True
     )
 
+    # --------------------------------------------------------
+    # Mostra motor utilizado
+    # --------------------------------------------------------
 
     motor = st.session_state.get(
         "ultimo_motor_imagem"
@@ -356,12 +363,11 @@ def mostrar_imagem(prompt):
             f"🎨 Motor utilizado: {motor}"
         )
 
-
     return True
 
 
 # ============================================================
-# 🔎 ACESSO À ÚLTIMA IMAGEM
+# 🔎 ÚLTIMA IMAGEM
 # ============================================================
 
 def obter_ultima_imagem():
@@ -386,20 +392,30 @@ def obter_prompt_ultima_imagem():
     )
 
 
+def obter_motor_ultima_imagem():
+
+    return st.session_state.get(
+        "ultimo_motor_imagem",
+        ""
+    )
+
+
 # ============================================================
 # 🧹 LIMPAR ÚLTIMA IMAGEM
 # ============================================================
 
 def limpar_ultima_imagem():
 
-    for chave in [
+    chaves = [
         "ultima_imagem",
         "ultima_imagem_caminho",
         "ultimo_prompt_imagem",
         "ultimo_motor_imagem",
-    ]:
+    ]
+
+    for chave in chaves:
 
         st.session_state.pop(
             chave,
             None
-        )
+    )
