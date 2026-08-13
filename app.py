@@ -40,7 +40,9 @@ from personagens import (
     apagar_personagem
 )
 
-from imagem import mostrar_imagem
+# ⚠️ NÃO coloque:
+# from imagem import mostrar_imagem
+
 from voz import mostrar_audio
 
 from video import (
