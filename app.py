@@ -826,9 +826,6 @@ if pergunta:
     # --------------------------------------------------------
     # 👁️ ANÁLISE DA ÚLTIMA IMAGEM
     # --------------------------------------------------------
-    # Permite que a Alex realmente analise a última imagem
-    # gerada quando o usuário fizer perguntas sobre ela.
-    # --------------------------------------------------------
 
     texto_imagem = pergunta.lower().strip()
 
@@ -855,11 +852,11 @@ if pergunta:
 
     if pedido_sobre_imagem:
 
-        ultima_imagem = st.session_state.get(
-            "ultima_imagem"
+        caminho_imagem = st.session_state.get(
+            "ultima_imagem_caminho"
         )
 
-        if ultima_imagem is None:
+        if not caminho_imagem:
 
             resposta_imagem = (
                 "🖼️ Ainda não tenho uma imagem disponível "
@@ -873,41 +870,107 @@ if pergunta:
 
             st.rerun()
 
-        with st.chat_message("assistant"):
+        if not os.path.exists(caminho_imagem):
 
-            with st.spinner(
-                "👁️ Alex IA está analisando a imagem..."
-            ):
+            resposta_imagem = (
+                "❌ Não consegui encontrar o arquivo da "
+                "última imagem."
+            )
 
-                try:
+            st.session_state.mensagens.append({
+                "role": "assistant",
+                "content": resposta_imagem
+            })
 
-                    resposta = cliente.models.generate_content(
-                        model=GEMINI_MODEL,
-                        contents=[
-                            ultima_imagem,
-                            pergunta
-                        ]
+            st.rerun()
+
+        try:
+
+            with open(
+                caminho_imagem,
+                "rb"
+            ) as arquivo:
+
+                dados_imagem = arquivo.read()
+
+            nome_arquivo = os.path.basename(
+                caminho_imagem
+            )
+
+            extensao = (
+                nome_arquivo
+                .lower()
+                .split(".")[-1]
+            )
+
+            tipos_imagem = {
+                "jpg": "image/jpeg",
+                "jpeg": "image/jpeg",
+                "png": "image/png",
+                "webp": "image/webp",
+            }
+
+            mime_type = tipos_imagem.get(
+                extensao,
+                "image/png"
+            )
+
+            from google.genai import types
+
+            imagem_gemini = types.Part.from_bytes(
+                data=dados_imagem,
+                mime_type=mime_type
+            )
+
+            with st.chat_message("assistant"):
+
+                with st.spinner(
+                    "👁️ Alex IA está analisando a imagem..."
+                ):
+
+                    resposta = (
+                        cliente.models.generate_content(
+                            model=GEMINI_MODEL,
+                            contents=[
+                                imagem_gemini,
+                                pergunta
+                            ]
+                        )
                     )
 
                     texto_resposta = (
                         resposta.text
                         if resposta.text
-                        else "Não consegui analisar a imagem."
+                        else (
+                            "Não consegui analisar "
+                            "a imagem."
+                        )
                     )
 
-                except Exception as erro:
+                st.write(
+                    texto_resposta
+                )
 
-                    texto_resposta = (
-                        f"❌ Erro ao analisar a imagem:\n\n"
-                        f"{erro}"
-                    )
+            st.session_state.mensagens.append({
+                "role": "assistant",
+                "content": texto_resposta
+            })
 
-            st.write(texto_resposta)
+        except Exception as erro:
 
-        st.session_state.mensagens.append({
-            "role": "assistant",
-            "content": texto_resposta
-        })
+            mensagem_erro = (
+                "❌ Não consegui analisar a imagem.\n\n"
+                f"Detalhes: {erro}"
+            )
+
+            st.session_state.mensagens.append({
+                "role": "assistant",
+                "content": mensagem_erro
+            })
+
+            st.error(
+                mensagem_erro
+            )
 
         st.stop()
 
