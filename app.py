@@ -8,6 +8,12 @@ import os
 import re
 import streamlit as st
 
+# ============================================================
+# 🖼️ GERENCIADOR DE IMAGENS
+# ============================================================
+
+from gerenciador_imagem import mostrar_imagem
+
 from config_ultra import (
     SYSTEM_PROMPT,
     GEMINI_MODEL,
