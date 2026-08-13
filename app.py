@@ -6,6 +6,8 @@
 
 import os
 import re
+import sys
+import importlib
 import streamlit as st
 
 st.sidebar.success("✅ APP NOVO CARREGADO — NVIDIA")
@@ -14,14 +16,17 @@ st.sidebar.success("✅ APP NOVO CARREGADO — NVIDIA")
 # 🖼️ GERENCIADOR DE IMAGENS
 # ============================================================
 
-from gerenciador_imagem import mostrar_imagem
+if "gerenciador_imagem" in sys.modules:
+    del sys.modules["gerenciador_imagem"]
 
 import gerenciador_imagem
+importlib.reload(gerenciador_imagem)
+
+from gerenciador_imagem import mostrar_imagem
 
 st.sidebar.info(
     f"🧪 Gerenciador carregado de:\n{gerenciador_imagem.__file__}"
 )
-
 from config_ultra import (
     SYSTEM_PROMPT,
     GEMINI_MODEL,
