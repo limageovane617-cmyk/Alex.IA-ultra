@@ -15,24 +15,33 @@ import streamlit as st
 # ⚙️ CONFIGURAÇÃO
 # ============================================================
 
-NVIDIA_API_URL = "https://ai.api.nvidia.com/v1/images/generations"
+NVIDIA_API_URL = (
+    "https://ai.api.nvidia.com/v1/genai/"
+    "black-forest-labs/flux.1-dev"
+)
 
 MODELO_IMAGEM = "black-forest-labs/flux.1-dev"
 
 
 # ============================================================
-# 🔐 PEGAR CHAVE NVIDIA
+# 🔐 OBTER CHAVE
 # ============================================================
 
 def obter_chave_nvidia():
 
     try:
-        chave = st.secrets.get("NVIDIA_API_KEY", "")
+        chave = st.secrets.get(
+            "NVIDIA_API_KEY",
+            ""
+        )
     except Exception:
         chave = ""
 
     if not chave:
-        chave = os.environ.get("NVIDIA_API_KEY", "")
+        chave = os.environ.get(
+            "NVIDIA_API_KEY",
+            ""
+        )
 
     return str(chave).strip()
 
@@ -43,7 +52,9 @@ def obter_chave_nvidia():
 
 def obter_pasta_imagens():
 
-    pasta = Path("/tmp/alex_ia_ultra_imagens")
+    pasta = Path(
+        "/tmp/alex_ia_ultra_imagens"
+    )
 
     pasta.mkdir(
         parents=True,
@@ -94,116 +105,164 @@ def gerar_imagem_nvidia(prompt):
     }
 
     dados = {
-        "model": MODELO_IMAGEM,
         "prompt": prompt.strip(),
-        "size": "1024x1024",
-        "n": 1
+        "width": 1024,
+        "height": 1024,
+        "steps": 30,
+        "cfg_scale": 5,
+        "seed": 0,
     }
 
     resposta = requests.post(
         NVIDIA_API_URL,
         headers=headers,
         json=dados,
-        timeout=180
+        timeout=180,
     )
 
-    # ========================================================
-    # MOSTRAR ERRO REAL DA NVIDIA
-    # ========================================================
+    # --------------------------------------------------------
+    # ERROS
+    # --------------------------------------------------------
+
+    if resposta.status_code == 401:
+
+        raise RuntimeError(
+            "NVIDIA HTTP 401: a chave não foi aceita."
+        )
+
+    if resposta.status_code == 403:
+
+        raise RuntimeError(
+            "NVIDIA HTTP 403: a NVIDIA recusou "
+            "a autorização da chave."
+        )
+
+    if resposta.status_code == 404:
+
+        raise RuntimeError(
+            "NVIDIA HTTP 404: o endpoint/modelo "
+            "FLUX.1-dev não está disponível nesse endereço."
+        )
+
+    if resposta.status_code == 405:
+
+        raise RuntimeError(
+            "NVIDIA HTTP 405: método HTTP não permitido "
+            "nesse endpoint."
+        )
 
     if resposta.status_code != 200:
 
         raise RuntimeError(
             f"NVIDIA HTTP {resposta.status_code}: "
-            f"{resposta.text[:3000]}"
+            f"{resposta.text[:2000]}"
         )
 
-    try:
+    # --------------------------------------------------------
+    # RESPOSTA
+    # --------------------------------------------------------
 
+    try:
         resultado = resposta.json()
 
     except Exception:
 
         raise RuntimeError(
             "A NVIDIA respondeu, mas a resposta "
-            "não é JSON."
+            "não está em JSON."
         )
 
-    # ========================================================
-    # PEGAR IMAGEM
-    # ========================================================
+    data = resultado.get(
+        "data",
+        []
+    )
 
-    imagens = resultado.get("data", [])
-
-    if not imagens:
+    if not data:
 
         raise RuntimeError(
-            "A NVIDIA respondeu corretamente, "
-            "mas não retornou nenhuma imagem."
+            "A NVIDIA respondeu sem retornar "
+            "uma imagem."
         )
 
-    primeira = imagens[0]
+    primeiro = data[0]
 
-    # ========================================================
+    # --------------------------------------------------------
     # URL
-    # ========================================================
+    # --------------------------------------------------------
 
-    url = primeira.get("url")
+    url = primeiro.get(
+        "url"
+    )
 
     if url:
 
-        resposta_imagem = requests.get(
+        download = requests.get(
             url,
             timeout=180
         )
 
-        resposta_imagem.raise_for_status()
+        if download.status_code != 200:
 
-        imagem_bytes = resposta_imagem.content
+            raise RuntimeError(
+                "Não foi possível baixar "
+                "a imagem retornada."
+            )
+
+        imagem_bytes = download.content
+
+    # --------------------------------------------------------
+    # BASE64
+    # --------------------------------------------------------
 
     else:
 
-        # ====================================================
-        # BASE64
-        # ====================================================
-
-        b64 = primeira.get("b64_json")
+        b64 = primeiro.get(
+            "b64_json"
+        )
 
         if not b64:
 
             raise RuntimeError(
-                "A NVIDIA não retornou URL "
-                "nem b64_json."
+                "A resposta não contém "
+                "URL nem b64_json."
             )
 
         try:
 
-            imagem_bytes = base64.b64decode(b64)
-
-        except Exception as erro:
-
-            raise RuntimeError(
-                f"Erro ao decodificar imagem: {erro}"
+            imagem_bytes = base64.b64decode(
+                b64
             )
 
-    # ========================================================
+        except Exception:
+
+            raise RuntimeError(
+                "Não foi possível decodificar "
+                "a imagem retornada."
+            )
+
+    # --------------------------------------------------------
     # SALVAR
-    # ========================================================
+    # --------------------------------------------------------
 
     caminho = (
         obter_pasta_imagens()
         / "ultima_imagem.png"
     )
 
-    with open(caminho, "wb") as arquivo:
+    with open(
+        caminho,
+        "wb"
+    ) as arquivo:
 
-        arquivo.write(imagem_bytes)
+        arquivo.write(
+            imagem_bytes
+        )
 
     return str(caminho)
 
 
 # ============================================================
-# 🖼️ FUNÇÃO PRINCIPAL
+# 🖼️ GERADOR PRINCIPAL
 # ============================================================
 
 def gerar_imagem(prompt):
@@ -260,7 +319,9 @@ def mostrar_imagem(prompt):
 
     if imagem is None:
 
-        st.error(mensagem)
+        st.error(
+            mensagem
+        )
 
         return False
 
@@ -271,7 +332,8 @@ def mostrar_imagem(prompt):
     )
 
     motor = st.session_state.get(
-        "ultimo_motor_imagem"
+        "ultimo_motor_imagem",
+        ""
     )
 
     if motor:
@@ -327,7 +389,7 @@ def limpar_ultima_imagem():
         "ultima_imagem",
         "ultima_imagem_caminho",
         "ultimo_prompt_imagem",
-        "ultimo_motor_imagem"
+        "ultimo_motor_imagem",
     ]
 
     for chave in chaves:
@@ -335,4 +397,4 @@ def limpar_ultima_imagem():
         st.session_state.pop(
             chave,
             None
-    )
+        )
