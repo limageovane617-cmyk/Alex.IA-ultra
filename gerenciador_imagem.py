@@ -1,6 +1,5 @@
 # ============================================================
 # 🖼️ ALEX IA ULTRA — GERENCIADOR DE IMAGENS NVIDIA
-# FLUX.1-dev / NVIDIA NIM
 # Criado por Geovani
 # ============================================================
 
@@ -16,36 +15,24 @@ import streamlit as st
 # ⚙️ CONFIGURAÇÃO
 # ============================================================
 
-NVIDIA_API_URL = (
-    "https://ai.api.nvidia.com/v1/genai/"
-    "black-forest-labs/flux.1-dev"
-)
+NVIDIA_API_URL = "https://ai.api.nvidia.com/v1/images/generations"
 
 MODELO_IMAGEM = "black-forest-labs/flux.1-dev"
 
 
 # ============================================================
-# 🔐 CHAVE NVIDIA
+# 🔐 PEGAR CHAVE NVIDIA
 # ============================================================
 
 def obter_chave_nvidia():
 
     try:
-        chave = st.secrets.get(
-            "NVIDIA_API_KEY",
-            ""
-        )
-
-        if chave:
-            return str(chave).strip()
-
+        chave = st.secrets.get("NVIDIA_API_KEY", "")
     except Exception:
-        pass
+        chave = ""
 
-    chave = os.environ.get(
-        "NVIDIA_API_KEY",
-        ""
-    )
+    if not chave:
+        chave = os.environ.get("NVIDIA_API_KEY", "")
 
     return str(chave).strip()
 
@@ -56,9 +43,7 @@ def obter_chave_nvidia():
 
 def obter_pasta_imagens():
 
-    pasta = Path(
-        "/tmp/alex_ia_ultra_imagens"
-    )
+    pasta = Path("/tmp/alex_ia_ultra_imagens")
 
     pasta.mkdir(
         parents=True,
@@ -69,7 +54,7 @@ def obter_pasta_imagens():
 
 
 # ============================================================
-# 💾 GUARDAR ÚLTIMA IMAGEM
+# 💾 GUARDAR IMAGEM
 # ============================================================
 
 def guardar_ultima_imagem(
@@ -89,7 +74,7 @@ def guardar_ultima_imagem(
 
 
 # ============================================================
-# 🎨 GERAR IMAGEM
+# 🎨 GERAR COM NVIDIA
 # ============================================================
 
 def gerar_imagem_nvidia(prompt):
@@ -99,8 +84,7 @@ def gerar_imagem_nvidia(prompt):
     if not chave:
 
         raise RuntimeError(
-            "NVIDIA_API_KEY não encontrada "
-            "nos Secrets do Streamlit."
+            "NVIDIA_API_KEY não encontrada nos Secrets."
         )
 
     headers = {
@@ -109,50 +93,30 @@ def gerar_imagem_nvidia(prompt):
         "Content-Type": "application/json",
     }
 
-    # ========================================================
-    # PAYLOAD FLUX.1-dev
-    # ========================================================
-
     dados = {
+        "model": MODELO_IMAGEM,
         "prompt": prompt.strip(),
-        "width": 1024,
-        "height": 1024,
-        "steps": 30,
-        "cfg_scale": 5,
-        "seed": 0,
-        "samples": 1,
+        "size": "1024x1024",
+        "n": 1
     }
-
-    # ========================================================
-    # POST NVIDIA
-    # ========================================================
 
     resposta = requests.post(
         NVIDIA_API_URL,
         headers=headers,
         json=dados,
-        timeout=300,
+        timeout=180
     )
 
     # ========================================================
-    # ERRO
+    # MOSTRAR ERRO REAL DA NVIDIA
     # ========================================================
 
     if resposta.status_code != 200:
 
-        try:
-            detalhe = resposta.json()
-        except Exception:
-            detalhe = resposta.text
-
         raise RuntimeError(
-            f"NVIDIA HTTP {resposta.status_code}:\n"
-            f"{detalhe}"
+            f"NVIDIA HTTP {resposta.status_code}: "
+            f"{resposta.text[:3000]}"
         )
-
-    # ========================================================
-    # JSON
-    # ========================================================
 
     try:
 
@@ -161,54 +125,66 @@ def gerar_imagem_nvidia(prompt):
     except Exception:
 
         raise RuntimeError(
-            "A NVIDIA respondeu, mas não retornou "
-            "JSON válido."
+            "A NVIDIA respondeu, mas a resposta "
+            "não é JSON."
         )
 
     # ========================================================
-    # ARTIFACTS
+    # PEGAR IMAGEM
     # ========================================================
 
-    artifacts = resultado.get(
-        "artifacts",
-        []
-    )
+    imagens = resultado.get("data", [])
 
-    if not artifacts:
+    if not imagens:
 
         raise RuntimeError(
-            "A NVIDIA respondeu, mas não retornou "
-            "nenhuma imagem."
+            "A NVIDIA respondeu corretamente, "
+            "mas não retornou nenhuma imagem."
         )
 
-    primeiro = artifacts[0]
+    primeira = imagens[0]
 
     # ========================================================
-    # BASE64
+    # URL
     # ========================================================
 
-    imagem_base64 = primeiro.get(
-        "base64"
-    )
+    url = primeira.get("url")
 
-    if not imagem_base64:
+    if url:
 
-        raise RuntimeError(
-            "A NVIDIA retornou o resultado, "
-            "mas não encontrou a imagem em base64."
+        resposta_imagem = requests.get(
+            url,
+            timeout=180
         )
 
-    try:
+        resposta_imagem.raise_for_status()
 
-        imagem_bytes = base64.b64decode(
-            imagem_base64
-        )
+        imagem_bytes = resposta_imagem.content
 
-    except Exception as erro:
+    else:
 
-        raise RuntimeError(
-            f"Erro ao decodificar imagem: {erro}"
-        )
+        # ====================================================
+        # BASE64
+        # ====================================================
+
+        b64 = primeira.get("b64_json")
+
+        if not b64:
+
+            raise RuntimeError(
+                "A NVIDIA não retornou URL "
+                "nem b64_json."
+            )
+
+        try:
+
+            imagem_bytes = base64.b64decode(b64)
+
+        except Exception as erro:
+
+            raise RuntimeError(
+                f"Erro ao decodificar imagem: {erro}"
+            )
 
     # ========================================================
     # SALVAR
@@ -219,20 +195,15 @@ def gerar_imagem_nvidia(prompt):
         / "ultima_imagem.png"
     )
 
-    with open(
-        caminho,
-        "wb"
-    ) as arquivo:
+    with open(caminho, "wb") as arquivo:
 
-        arquivo.write(
-            imagem_bytes
-        )
+        arquivo.write(imagem_bytes)
 
     return str(caminho)
 
 
 # ============================================================
-# 🖼️ GERADOR PRINCIPAL
+# 🖼️ FUNÇÃO PRINCIPAL
 # ============================================================
 
 def gerar_imagem(prompt):
@@ -254,10 +225,7 @@ def gerar_imagem(prompt):
             imagem=caminho,
             prompt=prompt,
             caminho=caminho,
-            motor=(
-                "NVIDIA NIM / "
-                f"{MODELO_IMAGEM}"
-            )
+            motor=MODELO_IMAGEM
         )
 
         return (
@@ -292,18 +260,13 @@ def mostrar_imagem(prompt):
 
     if imagem is None:
 
-        st.error(
-            mensagem
-        )
+        st.error(mensagem)
 
         return False
 
     st.image(
         imagem,
-        caption=(
-            "🖼️ Imagem gerada pela "
-            "Alex IA Ultra"
-        ),
+        caption="🖼️ Imagem gerada pela Alex IA Ultra",
         use_container_width=True
     )
 
@@ -314,14 +277,14 @@ def mostrar_imagem(prompt):
     if motor:
 
         st.caption(
-            f"🎨 Motor utilizado: {motor}"
+            f"🎨 Motor: NVIDIA / {motor}"
         )
 
     return True
 
 
 # ============================================================
-# 🔎 FUNÇÕES DE ACESSO
+# 🔎 ÚLTIMA IMAGEM
 # ============================================================
 
 def obter_ultima_imagem():
@@ -364,7 +327,7 @@ def limpar_ultima_imagem():
         "ultima_imagem",
         "ultima_imagem_caminho",
         "ultimo_prompt_imagem",
-        "ultimo_motor_imagem",
+        "ultimo_motor_imagem"
     ]
 
     for chave in chaves:
@@ -372,4 +335,4 @@ def limpar_ultima_imagem():
         st.session_state.pop(
             chave,
             None
-        )
+    )
