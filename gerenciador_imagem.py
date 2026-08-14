@@ -1,14 +1,19 @@
 # ============================================================
 # 🖼️ ALEX IA ULTRA — GERENCIADOR DE IMAGENS NVIDIA
+# TESTE DE LOCALIZAÇÃO DO ERRO
 # Criado por Geovani
 # ============================================================
 
 import os
-import base64
 from pathlib import Path
 
 import requests
 import streamlit as st
+
+
+# ============================================================
+# 🧪 TESTE DE CARREGAMENTO
+# ============================================================
 
 st.sidebar.error("🔥 GERENCIADOR NVIDIA NOVO — TESTE 999")
 
@@ -17,32 +22,35 @@ st.sidebar.error("🔥 GERENCIADOR NVIDIA NOVO — TESTE 999")
 # ⚙️ CONFIGURAÇÃO NVIDIA
 # ============================================================
 
-NVIDIA_URL = "https://integrate.api.nvidia.com/v1/images/generations"
+NVIDIA_API_URL = (
+    "https://ai.api.nvidia.com/v1/genai/"
+    "black-forest-labs/flux.1-dev"
+)
 
-MOTORES_IMAGEM = [
-    "flux.2-klein-4b",
-    "qwen-image",
-    "flux.1-schnell",
-    "stable-diffusion-3.5-large",
-]
+MODELO_IMAGEM = "black-forest-labs/FLUX.1-dev"
 
 
 # ============================================================
-# 🔐 CHAVE NVIDIA
+# 🔐 OBTER CHAVE NVIDIA
 # ============================================================
 
 def obter_chave_nvidia():
 
     try:
-        chave = st.secrets["NVIDIA_API_KEY"]
-
-        if chave:
-            return str(chave).strip()
-
+        chave = st.secrets.get(
+            "NVIDIA_API_KEY",
+            ""
+        )
     except Exception:
-        pass
+        chave = ""
 
-    return None
+    if not chave:
+        chave = os.environ.get(
+            "NVIDIA_API_KEY",
+            ""
+        )
+
+    return str(chave).strip()
 
 
 # ============================================================
@@ -51,7 +59,9 @@ def obter_chave_nvidia():
 
 def obter_pasta_imagens():
 
-    pasta = Path("/tmp/alex_ia_ultra_imagens")
+    pasta = Path(
+        "/tmp/alex_ia_ultra_imagens"
+    )
 
     pasta.mkdir(
         parents=True,
@@ -93,32 +103,35 @@ def guardar_ultima_imagem(
 # 🎨 GERAR IMAGEM COM NVIDIA
 # ============================================================
 
-def _gerar_com_nvidia(prompt, modelo):
+def gerar_imagem_nvidia(prompt):
 
     chave = obter_chave_nvidia()
 
     if not chave:
 
         raise RuntimeError(
-            "A chave NVIDIA_API_KEY não foi encontrada "
+            "NVIDIA_API_KEY não encontrada "
             "nos Secrets do Streamlit."
         )
 
     headers = {
         "Authorization": f"Bearer {chave}",
-        "Content-Type": "application/json",
         "Accept": "application/json",
+        "Content-Type": "application/json",
     }
 
     dados = {
-        "model": modelo,
-        "prompt": prompt,
-        "size": "1024x1024",
-        "n": 1,
+        "model": MODELO_IMAGEM,
+        "prompt": prompt.strip(),
+        "width": 1024,
+        "height": 1024,
+        "steps": 30,
+        "cfg_scale": 5,
+        "seed": 0,
     }
 
     resposta = requests.post(
-        NVIDIA_URL,
+        NVIDIA_API_URL,
         headers=headers,
         json=dados,
         timeout=180,
@@ -127,74 +140,84 @@ def _gerar_com_nvidia(prompt, modelo):
     if resposta.status_code != 200:
 
         raise RuntimeError(
-            f"HTTP {resposta.status_code}: "
-            f"{resposta.text}"
+            f"NVIDIA HTTP {resposta.status_code}: "
+            f"{resposta.text[:2000]}"
         )
 
     resultado = resposta.json()
 
-    imagens = resultado.get("data", [])
+    data = resultado.get(
+        "data",
+        []
+    )
 
-    if not imagens:
+    if not data:
 
         raise RuntimeError(
             "A NVIDIA respondeu, mas não retornou "
-            "nenhuma imagem."
+            "dados de imagem."
         )
 
-    imagem = imagens[0]
+    primeiro = data[0]
 
-    # --------------------------------------------------------
-    # URL
-    # --------------------------------------------------------
+    url_imagem = primeiro.get(
+        "url"
+    )
 
-    url = imagem.get("url")
-
-    if url:
+    if url_imagem:
 
         imagem_resposta = requests.get(
-            url,
-            timeout=180
+            url_imagem,
+            timeout=180,
         )
 
-        imagem_resposta.raise_for_status()
+        if imagem_resposta.status_code != 200:
 
-        imagem_bytes = imagem_resposta.content
+            raise RuntimeError(
+                "Não foi possível baixar "
+                "a imagem retornada pela NVIDIA."
+            )
 
-    # --------------------------------------------------------
-    # BASE64
-    # --------------------------------------------------------
+        bytes_imagem = imagem_resposta.content
 
     else:
 
-        b64 = imagem.get("b64_json")
+        import base64
+
+        b64 = primeiro.get(
+            "b64_json"
+        )
 
         if not b64:
 
             raise RuntimeError(
                 "A resposta da NVIDIA não contém "
-                "URL nem b64_json."
+                "URL nem imagem base64."
             )
 
-        imagem_bytes = base64.b64decode(b64)
+        bytes_imagem = base64.b64decode(
+            b64
+        )
 
-    # --------------------------------------------------------
-    # SALVAR
-    # --------------------------------------------------------
+    caminho = (
+        obter_pasta_imagens()
+        / "ultima_imagem.png"
+    )
 
-    pasta = obter_pasta_imagens()
+    with open(
+        caminho,
+        "wb"
+    ) as arquivo:
 
-    caminho = pasta / "ultima_imagem.png"
-
-    with open(caminho, "wb") as arquivo:
-
-        arquivo.write(imagem_bytes)
+        arquivo.write(
+            bytes_imagem
+        )
 
     return str(caminho)
 
 
 # ============================================================
-# 🖼️ GERAR IMAGEM — FALLBACK
+# 🖼️ GERADOR PRINCIPAL
 # ============================================================
 
 def gerar_imagem(prompt):
@@ -206,81 +229,53 @@ def gerar_imagem(prompt):
             "❌ O prompt da imagem está vazio."
         )
 
-    erros = []
+    try:
 
-    for modelo in MOTORES_IMAGEM:
+        caminho = gerar_imagem_nvidia(
+            prompt
+        )
 
-        try:
+        guardar_ultima_imagem(
+            imagem=caminho,
+            prompt=prompt,
+            caminho=caminho,
+            motor=(
+                "NVIDIA NIM / "
+                f"{MODELO_IMAGEM}"
+            ),
+        )
 
-            caminho = _gerar_com_nvidia(
-                prompt.strip(),
-                modelo
+        return (
+            caminho,
+            "🖼️ Imagem gerada pela NVIDIA."
+        )
+
+    except Exception as erro:
+
+        return (
+            None,
+            (
+                "❌ Erro ao gerar imagem pela NVIDIA:\n\n"
+                f"{erro}"
             )
-
-            guardar_ultima_imagem(
-                imagem=caminho,
-                prompt=prompt,
-                caminho=caminho,
-                motor=modelo
-            )
-
-            return (
-                caminho,
-                f"🖼️ Imagem gerada pela NVIDIA "
-                f"com {modelo}."
-            )
-
-        except Exception as erro:
-
-            erros.append(
-                f"{modelo}: {erro}"
-            )
-
-            continue
-
-    return (
-        None,
-        "❌ Todos os motores de imagem NVIDIA "
-        "falharam.\n\n"
-        + "\n\n".join(erros)
-    )
+        )
 
 
 # ============================================================
-# 🖼️ MOSTRAR IMAGEM
+# 🖼️ MOSTRAR IMAGEM — TESTE
 # ============================================================
 
 def mostrar_imagem(prompt):
 
-    with st.spinner(
-        "🎨 Alex IA está criando sua imagem..."
-    ):
-
-        imagem, mensagem = gerar_imagem(prompt)
-
-    if imagem is None:
-
-        st.error(mensagem)
-
-        return False
-
-    st.image(
-        imagem,
-        caption="🖼️ Imagem gerada pela Alex IA Ultra",
-        use_container_width=True,
+    st.error(
+        "🧪 CHEGUEI NO mostrar_imagem DO NVIDIA"
     )
 
-    motor = st.session_state.get(
-        "ultimo_motor_imagem"
+    st.write(
+        f"Prompt recebido: {prompt}"
     )
 
-    if motor:
-
-        st.caption(
-            f"🎨 Motor utilizado: NVIDIA / {motor}"
-        )
-
-    return True
+    return False
 
 
 # ============================================================
@@ -309,20 +304,30 @@ def obter_prompt_ultima_imagem():
     )
 
 
+def obter_motor_ultima_imagem():
+
+    return st.session_state.get(
+        "ultimo_motor_imagem",
+        ""
+    )
+
+
 # ============================================================
 # 🧹 LIMPAR ÚLTIMA IMAGEM
 # ============================================================
 
 def limpar_ultima_imagem():
 
-    for chave in [
+    chaves = [
         "ultima_imagem",
         "ultima_imagem_caminho",
         "ultimo_prompt_imagem",
         "ultimo_motor_imagem",
-    ]:
+    ]
+
+    for chave in chaves:
 
         st.session_state.pop(
             chave,
             None
-    )
+        )
