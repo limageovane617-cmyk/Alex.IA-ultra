@@ -1,6 +1,6 @@
 # ============================================================
-# 🖼️ ALEX IA ULTRA — GERENCIADOR DE IMAGENS
-# HUGGING FACE
+# 🖼️ ALEX IA ULTRA — TESTE DE GERAÇÃO DE IMAGENS
+# HUGGING FACE INFERENCE PROVIDERS
 # Criado por Geovani
 # ============================================================
 
@@ -14,7 +14,8 @@ import streamlit as st
 # ⚙️ CONFIGURAÇÃO
 # ============================================================
 
-MODELO_IMAGEM = "stabilityai/stable-diffusion-xl-base-1.0"
+MODELO_IMAGEM = "black-forest-labs/FLUX.1-schnell"
+PROVEDOR = "auto"
 
 
 # ============================================================
@@ -54,6 +55,7 @@ def guardar_ultima_imagem(imagem, prompt, caminho=None, motor=None):
         st.session_state.ultimo_prompt_imagem = prompt
         st.session_state.ultimo_motor_imagem = motor
         return True
+
     except Exception:
         return False
 
@@ -63,6 +65,7 @@ def guardar_ultima_imagem(imagem, prompt, caminho=None, motor=None):
 # ============================================================
 
 def gerar_imagem_huggingface(prompt):
+
     token = obter_token_huggingface()
 
     if not token:
@@ -70,22 +73,41 @@ def gerar_imagem_huggingface(prompt):
             "HF_TOKEN não foi encontrado nos Secrets do Streamlit."
         )
 
+    # --------------------------------------------------------
+    # Importar Hugging Face
+    # --------------------------------------------------------
+
     try:
         from huggingface_hub import InferenceClient
+
     except Exception:
         raise RuntimeError(
             "A biblioteca huggingface_hub não está instalada. "
             "Adicione huggingface_hub ao requirements.txt."
         )
 
+    # --------------------------------------------------------
+    # Criar cliente
+    # --------------------------------------------------------
+
     try:
         cliente = InferenceClient(
-            provider="hf-inference",
+            provider=PROVEDOR,
             api_key=token,
         )
 
+    except Exception as erro:
+        raise RuntimeError(
+            f"Não foi possível iniciar o Hugging Face: {erro}"
+        )
+
+    # --------------------------------------------------------
+    # Gerar imagem
+    # --------------------------------------------------------
+
+    try:
         imagem = cliente.text_to_image(
-            prompt=prompt.strip(),
+            prompt.strip(),
             model=MODELO_IMAGEM,
         )
 
@@ -94,15 +116,24 @@ def gerar_imagem_huggingface(prompt):
             f"Erro na geração de imagem pelo Hugging Face: {erro}"
         )
 
+    # --------------------------------------------------------
+    # Verificar retorno
+    # --------------------------------------------------------
+
     if imagem is None:
         raise RuntimeError(
             "O Hugging Face não retornou uma imagem."
         )
 
+    # --------------------------------------------------------
+    # Salvar imagem
+    # --------------------------------------------------------
+
     caminho = obter_pasta_imagens() / "ultima_imagem.png"
 
     try:
         imagem.save(caminho)
+
     except Exception as erro:
         raise RuntimeError(
             f"Não foi possível salvar a imagem: {erro}"
@@ -116,10 +147,12 @@ def gerar_imagem_huggingface(prompt):
 # ============================================================
 
 def gerar_imagem(prompt):
+
     if not prompt or not prompt.strip():
         return None, "❌ O prompt da imagem está vazio."
 
     try:
+
         caminho = gerar_imagem_huggingface(prompt)
 
         guardar_ultima_imagem(
@@ -132,7 +165,11 @@ def gerar_imagem(prompt):
         return caminho, "🖼️ Imagem gerada com sucesso."
 
     except Exception as erro:
-        return None, f"❌ Erro ao gerar imagem:\n\n{erro}"
+
+        return None, (
+            "❌ Erro ao gerar imagem:\n\n"
+            f"{erro}"
+        )
 
 
 # ============================================================
@@ -140,7 +177,11 @@ def gerar_imagem(prompt):
 # ============================================================
 
 def mostrar_imagem(prompt):
-    with st.spinner("🎨 Alex IA está criando sua imagem..."):
+
+    with st.spinner(
+        "🎨 Alex IA está criando sua imagem..."
+    ):
+
         imagem, mensagem = gerar_imagem(prompt)
 
     if imagem is None:
@@ -153,9 +194,15 @@ def mostrar_imagem(prompt):
         use_container_width=True,
     )
 
-    motor = st.session_state.get("ultimo_motor_imagem", "")
+    motor = st.session_state.get(
+        "ultimo_motor_imagem",
+        "",
+    )
+
     if motor:
-        st.caption(f"🎨 Motor utilizado: {motor}")
+        st.caption(
+            f"🎨 Motor utilizado: {motor}"
+        )
 
     return True
 
@@ -165,19 +212,33 @@ def mostrar_imagem(prompt):
 # ============================================================
 
 def obter_ultima_imagem():
-    return st.session_state.get("ultima_imagem")
+
+    return st.session_state.get(
+        "ultima_imagem"
+    )
 
 
 def obter_caminho_ultima_imagem():
-    return st.session_state.get("ultima_imagem_caminho")
+
+    return st.session_state.get(
+        "ultima_imagem_caminho"
+    )
 
 
 def obter_prompt_ultima_imagem():
-    return st.session_state.get("ultimo_prompt_imagem", "")
+
+    return st.session_state.get(
+        "ultimo_prompt_imagem",
+        "",
+    )
 
 
 def obter_motor_ultima_imagem():
-    return st.session_state.get("ultimo_motor_imagem", "")
+
+    return st.session_state.get(
+        "ultimo_motor_imagem",
+        "",
+    )
 
 
 # ============================================================
@@ -185,10 +246,63 @@ def obter_motor_ultima_imagem():
 # ============================================================
 
 def limpar_ultima_imagem():
+
     for chave in [
         "ultima_imagem",
         "ultima_imagem_caminho",
         "ultimo_prompt_imagem",
         "ultimo_motor_imagem",
     ]:
-        st.session_state.pop(chave, None)
+
+        st.session_state.pop(
+            chave,
+            None,
+        )
+
+
+# ============================================================
+# 🧪 TESTE DIRETO
+# ============================================================
+
+def executar_teste():
+
+    st.title("🖼️ Teste de Geração de Imagem")
+
+    st.write(
+        "Este arquivo testa somente a geração "
+        "de imagens pelo Hugging Face."
+    )
+
+    st.info(
+        f"Modelo: {MODELO_IMAGEM}"
+    )
+
+    prompt = st.text_input(
+        "Digite o que deseja gerar:",
+        value=(
+            "Um robô futurista caminhando "
+            "em uma cidade cyberpunk à noite, "
+            "imagem cinematográfica, muito detalhada"
+        ),
+    )
+
+    if st.button(
+        "🎨 Gerar imagem",
+        use_container_width=True,
+    ):
+
+        if not prompt.strip():
+            st.warning(
+                "Digite um prompt para gerar a imagem."
+            )
+            return
+
+        mostrar_imagem(prompt)
+
+
+# ============================================================
+# 🚀 EXECUÇÃO DO TESTE
+# ============================================================
+
+if __name__ == "__main__":
+    executar_teste()
