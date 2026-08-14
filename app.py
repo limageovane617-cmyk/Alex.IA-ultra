@@ -11,6 +11,7 @@ import importlib
 import streamlit as st
 
 st.sidebar.success("✅ APP NOVO CARREGADO — NVIDIA")
+st.sidebar.success("🧪 APP.PY NOVO — TESTE FINAL")
 
 # ============================================================
 # 🖼️ GERENCIADOR DE IMAGENS
