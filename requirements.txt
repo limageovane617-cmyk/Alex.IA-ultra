@@ -12,3 +12,4 @@ python-dotenv>=1.0.1
 markdown>=3.7
 huggingface_hub
 gradio_client
+google-genai
