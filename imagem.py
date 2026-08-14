@@ -1,16 +1,15 @@
 # ============================================================
 # 🖼️ ALEX IA ULTRA — GERENCIADOR DE IMAGENS
-# NVIDIA NIM
+# NVIDIA NIM / FLUX.1-dev
 # Criado por Geovani
 # ============================================================
 
 import os
+import base64
 from pathlib import Path
 
 import requests
 import streamlit as st
-
-st.sidebar.error("🔥 GERENCIADOR NVIDIA NOVO — TESTE 123")
 
 
 # ============================================================
@@ -18,10 +17,11 @@ st.sidebar.error("🔥 GERENCIADOR NVIDIA NOVO — TESTE 123")
 # ============================================================
 
 NVIDIA_API_URL = (
-    "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-dev"
+    "https://ai.api.nvidia.com/v1/genai/"
+    "black-forest-labs/flux.1-dev"
 )
 
-MODELO_IMAGEM = "black-forest-labs/FLUX.1-dev"
+MODELO_IMAGEM = "black-forest-labs/flux.1-dev"
 
 
 # ============================================================
@@ -31,18 +31,22 @@ MODELO_IMAGEM = "black-forest-labs/FLUX.1-dev"
 def obter_chave_nvidia():
 
     try:
+
         chave = st.secrets.get(
             "NVIDIA_API_KEY",
             ""
         )
-    except Exception:
-        chave = ""
 
-    if not chave:
-        chave = os.environ.get(
-            "NVIDIA_API_KEY",
-            ""
-        )
+        if chave:
+            return str(chave).strip()
+
+    except Exception:
+        pass
+
+    chave = os.environ.get(
+        "NVIDIA_API_KEY",
+        ""
+    )
 
     return str(chave).strip()
 
@@ -120,97 +124,116 @@ def gerar_imagem_nvidia(prompt):
         "Content-Type": "application/json",
     }
 
+    # ========================================================
+    # PAYLOAD OFICIAL DO FLUX.1-dev
+    # ========================================================
+
     dados = {
-        "model": MODELO_IMAGEM,
         "prompt": prompt.strip(),
         "width": 1024,
         "height": 1024,
-        "steps": 30,
         "cfg_scale": 5,
+        "mode": "base",
+        "samples": 1,
         "seed": 0,
+        "steps": 50,
     }
 
     resposta = requests.post(
         NVIDIA_API_URL,
         headers=headers,
         json=dados,
-        timeout=180,
+        timeout=300,
     )
+
+    # ========================================================
+    # ERRO HTTP
+    # ========================================================
 
     if resposta.status_code != 200:
 
+        try:
+            detalhe = resposta.json()
+
+        except Exception:
+            detalhe = resposta.text
+
         raise RuntimeError(
             f"NVIDIA HTTP {resposta.status_code}: "
-            f"{resposta.text[:2000]}"
+            f"{detalhe}"
         )
 
-    resultado = resposta.json()
-
     # ========================================================
-    # Tentar encontrar a imagem retornada
+    # JSON
     # ========================================================
 
-    data = resultado.get(
-        "data",
+    try:
+
+        resultado = resposta.json()
+
+    except Exception:
+
+        raise RuntimeError(
+            "A NVIDIA respondeu, mas a resposta "
+            "não é um JSON válido."
+        )
+
+    # ========================================================
+    # RESPOSTA OFICIAL DO NIM
+    #
+    # artifacts[0]["base64"]
+    # ========================================================
+
+    artifacts = resultado.get(
+        "artifacts",
         []
     )
 
-    if not data:
+    if not artifacts:
 
         raise RuntimeError(
             "A NVIDIA respondeu, mas não retornou "
-            "dados de imagem."
+            "nenhum artifact de imagem."
         )
 
-    primeiro = data[0]
+    primeiro = artifacts[0]
 
-    # Algumas APIs retornam uma URL.
-    url_imagem = primeiro.get(
-        "url"
+    imagem_base64 = primeiro.get(
+        "base64"
     )
 
-    if url_imagem:
+    if not imagem_base64:
 
-        imagem_resposta = requests.get(
-            url_imagem,
-            timeout=180,
+        raise RuntimeError(
+            "A NVIDIA retornou o resultado, "
+            "mas não encontrou a imagem em base64."
         )
 
-        if imagem_resposta.status_code != 200:
+    # ========================================================
+    # DECODIFICAR BASE64
+    # ========================================================
 
-            raise RuntimeError(
-                "Não foi possível baixar "
-                "a imagem retornada pela NVIDIA."
-            )
+    try:
 
-        bytes_imagem = (
-            imagem_resposta.content
+        imagem_bytes = base64.b64decode(
+            imagem_base64
         )
 
-    else:
+    except Exception as erro:
 
-        # Algumas respostas podem retornar
-        # a imagem em base64.
-        import base64
-
-        b64 = primeiro.get(
-            "b64_json"
+        raise RuntimeError(
+            f"Erro ao decodificar a imagem NVIDIA: "
+            f"{erro}"
         )
 
-        if not b64:
+    # ========================================================
+    # SALVAR
+    # ========================================================
 
-            raise RuntimeError(
-                "A resposta da NVIDIA não contém "
-                "URL nem imagem base64."
-            )
-
-        bytes_imagem = base64.b64decode(
-            b64
-        )
+    pasta = obter_pasta_imagens()
 
     caminho = (
-        obter_pasta_imagens()
-        / "ultima_imagem.png"
+        pasta / "ultima_imagem.png"
     )
 
     with open(
@@ -219,7 +242,7 @@ def gerar_imagem_nvidia(prompt):
     ) as arquivo:
 
         arquivo.write(
-            bytes_imagem
+            imagem_bytes
         )
 
     return str(caminho)
@@ -366,4 +389,4 @@ def limpar_ultima_imagem():
         st.session_state.pop(
             chave,
             None
-        )
+    )
