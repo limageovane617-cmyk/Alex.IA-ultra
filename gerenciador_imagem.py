@@ -1,34 +1,36 @@
 # ============================================================
-# 🖼️ ALEX IA ULTRA — GERENCIADOR DE IMAGENS NVIDIA
+# 🧪 TESTE NVIDIA — ALEX IA ULTRA
+# NÃO GERA IMAGEM AINDA
 # Criado por Geovani
 # ============================================================
 
 import os
-import base64
-from pathlib import Path
-
 import requests
 import streamlit as st
 
 
 # ============================================================
-# ⚙️ CONFIGURAÇÃO NVIDIA
+# ⚙️ ENDPOINTS OFICIAIS NVIDIA
 # ============================================================
 
-NVIDIA_API_URL = (
-    "https://integrate.api.nvidia.com/v1/images/generations"
+NVIDIA_BASE_URL = "https://ai.api.nvidia.com"
+
+ENDPOINT_INFER = (
+    "https://ai.api.nvidia.com/v1/genai/"
+    "black-forest-labs/flux.1-dev"
 )
 
-MODELO_IMAGEM = "flux.1-dev"
+ENDPOINT_IMAGES = (
+    "https://ai.api.nvidia.com/v1/images/generations"
+)
 
 
 # ============================================================
-# 🔐 OBTER CHAVE NVIDIA
+# 🔐 PEGAR CHAVE
 # ============================================================
 
 def obter_chave_nvidia():
 
-    # Primeiro tenta os Secrets do Streamlit
     try:
 
         chave = st.secrets.get(
@@ -37,12 +39,15 @@ def obter_chave_nvidia():
         )
 
         if chave:
+
             return str(chave).strip()
 
-    except Exception:
-        pass
+    except Exception as erro:
 
-    # Depois tenta variável de ambiente
+        st.warning(
+            f"⚠️ Erro ao ler Secrets: {erro}"
+        )
+
     chave = os.environ.get(
         "NVIDIA_API_KEY",
         ""
@@ -52,309 +57,210 @@ def obter_chave_nvidia():
 
 
 # ============================================================
-# 📁 PASTA DAS IMAGENS
+# 🧪 TESTAR ENDPOINT
 # ============================================================
 
-def obter_pasta_imagens():
-
-    pasta = Path(
-        "/tmp/alex_ia_ultra_imagens"
-    )
-
-    pasta.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    return pasta
-
-
-# ============================================================
-# 💾 GUARDAR ÚLTIMA IMAGEM
-# ============================================================
-
-def guardar_ultima_imagem(
-    imagem,
-    prompt,
-    caminho=None,
-    motor=None
+def testar_endpoint(
+    nome,
+    url,
+    chave
 ):
 
-    try:
-
-        st.session_state.ultima_imagem = imagem
-
-        st.session_state.ultima_imagem_caminho = (
-            caminho
-        )
-
-        st.session_state.ultimo_prompt_imagem = (
-            prompt
-        )
-
-        st.session_state.ultimo_motor_imagem = (
-            motor
-        )
-
-        return True
-
-    except Exception:
-
-        return False
-
-
-# ============================================================
-# 🎨 GERAR IMAGEM COM NVIDIA
-# ============================================================
-
-def gerar_imagem_nvidia(prompt):
-
-    chave = obter_chave_nvidia()
-
-    if not chave:
-
-        raise RuntimeError(
-            "NVIDIA_API_KEY não encontrada "
-            "nos Secrets do Streamlit."
-        )
-
-    headers = {
-        "Authorization": f"Bearer {chave}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-
-    dados = {
-        "model": MODELO_IMAGEM,
-        "prompt": prompt.strip(),
-        "size": "1024x1024",
-        "n": 1,
-    }
-
-    resposta = requests.post(
-        NVIDIA_API_URL,
-        headers=headers,
-        json=dados,
-        timeout=180,
+    st.subheader(
+        f"🌐 Testando: {nome}"
     )
 
-    # --------------------------------------------------------
-    # Verificar resposta
-    # --------------------------------------------------------
+    st.code(
+        url
+    )
 
-    if resposta.status_code != 200:
+    try:
+
+        resposta = requests.get(
+            url,
+            headers={
+                "Authorization": f"Bearer {chave}",
+                "Accept": "application/json",
+            },
+            timeout=30,
+        )
+
+        st.write(
+            f"HTTP: `{resposta.status_code}`"
+        )
+
+        st.write(
+            "Resposta:"
+        )
 
         try:
-            detalhe = resposta.json()
+
+            st.json(
+                resposta.json()
+            )
 
         except Exception:
-            detalhe = resposta.text
 
-        raise RuntimeError(
-            f"NVIDIA HTTP {resposta.status_code}:\n"
-            f"{detalhe}"
-        )
-
-    # --------------------------------------------------------
-    # Converter resposta
-    # --------------------------------------------------------
-
-    try:
-
-        resultado = resposta.json()
-
-    except Exception:
-
-        raise RuntimeError(
-            "A NVIDIA respondeu, mas a resposta "
-            "não está em JSON."
-        )
-
-    # --------------------------------------------------------
-    # Procurar imagens
-    # --------------------------------------------------------
-
-    imagens = resultado.get(
-        "data",
-        []
-    )
-
-    if not imagens:
-
-        raise RuntimeError(
-            "A NVIDIA respondeu corretamente, "
-            "mas não retornou nenhuma imagem."
-        )
-
-    primeira_imagem = imagens[0]
-
-    # --------------------------------------------------------
-    # Caso a NVIDIA retorne URL
-    # --------------------------------------------------------
-
-    url_imagem = primeira_imagem.get(
-        "url"
-    )
-
-    if url_imagem:
-
-        imagem_resposta = requests.get(
-            url_imagem,
-            timeout=180
-        )
-
-        if imagem_resposta.status_code != 200:
-
-            raise RuntimeError(
-                "A imagem foi retornada pela NVIDIA, "
-                "mas não foi possível baixá-la."
+            st.code(
+                resposta.text[:3000]
             )
 
-        imagem_bytes = imagem_resposta.content
-
-    # --------------------------------------------------------
-    # Caso a NVIDIA retorne base64
-    # --------------------------------------------------------
-
-    else:
-
-        b64 = primeira_imagem.get(
-            "b64_json"
-        )
-
-        if not b64:
-
-            raise RuntimeError(
-                "A resposta da NVIDIA não contém "
-                "URL nem b64_json."
-            )
-
-        try:
-
-            imagem_bytes = base64.b64decode(
-                b64
-            )
-
-        except Exception as erro:
-
-            raise RuntimeError(
-                f"Erro ao decodificar a imagem: {erro}"
-            )
-
-    # --------------------------------------------------------
-    # Salvar imagem
-    # --------------------------------------------------------
-
-    pasta = obter_pasta_imagens()
-
-    caminho = (
-        pasta / "ultima_imagem.png"
-    )
-
-    with open(
-        caminho,
-        "wb"
-    ) as arquivo:
-
-        arquivo.write(
-            imagem_bytes
-        )
-
-    return str(caminho)
-
-
-# ============================================================
-# 🖼️ GERADOR PRINCIPAL
-# ============================================================
-
-def gerar_imagem(prompt):
-
-    if not prompt or not prompt.strip():
-
-        return (
-            None,
-            "❌ O prompt da imagem está vazio."
-        )
-
-    try:
-
-        caminho = gerar_imagem_nvidia(
-            prompt
-        )
-
-        guardar_ultima_imagem(
-            imagem=caminho,
-            prompt=prompt,
-            caminho=caminho,
-            motor=(
-                "NVIDIA NIM / "
-                f"{MODELO_IMAGEM}"
-            ),
-        )
-
-        return (
-            caminho,
-            "🖼️ Imagem gerada pela NVIDIA."
-        )
+        return resposta.status_code
 
     except Exception as erro:
 
-        return (
-            None,
-            (
-                "❌ Erro ao gerar imagem pela NVIDIA:\n\n"
-                f"{erro}"
-            )
+        st.error(
+            f"❌ Erro de conexão: {erro}"
         )
+
+        return None
 
 
 # ============================================================
-# 🖼️ MOSTRAR IMAGEM
+# 🧪 MOSTRAR IMAGEM
 # ============================================================
 
 def mostrar_imagem(prompt):
 
-    with st.spinner(
-        "🎨 Alex IA está criando sua imagem..."
-    ):
+    st.title(
+        "🧪 TESTE NVIDIA"
+    )
 
-        imagem, mensagem = gerar_imagem(
-            prompt
-        )
+    st.warning(
+        "⚠️ Este é apenas um teste de conexão. "
+        "Nenhuma imagem será gerada."
+    )
 
-    if imagem is None:
+    chave = obter_chave_nvidia()
+
+    # --------------------------------------------------------
+    # Verificar chave
+    # --------------------------------------------------------
+
+    if not chave:
 
         st.error(
-            mensagem
+            "❌ NVIDIA_API_KEY NÃO FOI ENCONTRADA."
+        )
+
+        st.info(
+            "A chave precisa estar nos Secrets "
+            "do Streamlit com o nome NVIDIA_API_KEY."
         )
 
         return False
 
-    st.image(
-        imagem,
-        caption=(
-            "🖼️ Imagem gerada pela "
-            "Alex IA Ultra"
-        ),
-        use_container_width=True,
+    st.success(
+        "✅ NVIDIA_API_KEY foi encontrada."
     )
 
-    motor = st.session_state.get(
-        "ultimo_motor_imagem"
+    # NÃO mostrar a chave na tela.
+
+    st.write(
+        f"🔑 Chave encontrada: "
+        f"`{chave[:6]}...{chave[-4:]}`"
     )
 
-    if motor:
+    # --------------------------------------------------------
+    # Teste 1 — endpoint principal
+    # --------------------------------------------------------
 
-        st.caption(
-            f"🎨 Motor utilizado: {motor}"
+    status_infer = testar_endpoint(
+        "FLUX.1-dev / endpoint NIM",
+        ENDPOINT_INFER,
+        chave
+    )
+
+    # --------------------------------------------------------
+    # Teste 2 — endpoint OpenAI-compatible
+    # --------------------------------------------------------
+
+    status_images = testar_endpoint(
+        "FLUX.1-dev / OpenAI Images",
+        ENDPOINT_IMAGES,
+        chave
+    )
+
+    # --------------------------------------------------------
+    # Resultado
+    # --------------------------------------------------------
+
+    st.divider()
+
+    st.subheader(
+        "📊 RESULTADO DO TESTE"
+    )
+
+    st.write(
+        f"Endpoint NIM: `{status_infer}`"
+    )
+
+    st.write(
+        f"Endpoint Images: `{status_images}`"
+    )
+
+    if (
+        status_infer == 200
+        or status_images == 200
+    ):
+
+        st.success(
+            "🎉 A NVIDIA respondeu! "
+            "Temos um endpoint funcionando."
         )
 
-    return True
+        st.info(
+            "Agora podemos montar o gerador "
+            "usando exatamente o endpoint que respondeu."
+        )
+
+    elif (
+        status_infer == 401
+        or status_images == 401
+    ):
+
+        st.error(
+            "🔐 A NVIDIA recusou a autenticação. "
+            "Nesse caso o problema é a autorização/chave."
+        )
+
+    elif (
+        status_infer == 404
+        and status_images == 404
+    ):
+
+        st.error(
+            "🌐 Os dois endpoints retornaram 404."
+        )
+
+        st.warning(
+            "Isso indica que precisamos verificar "
+            "qual endpoint público está associado "
+            "à sua chave NVIDIA/API Catalog."
+        )
+
+    else:
+
+        st.warning(
+            "⚠️ A NVIDIA respondeu, mas precisamos "
+            "analisar os códigos acima."
+        )
+
+    return False
 
 
 # ============================================================
-# 🔎 ACESSO À ÚLTIMA IMAGEM
+# 🔧 FUNÇÕES COMPATÍVEIS COM O APP
 # ============================================================
+
+def gerar_imagem(prompt):
+
+    return (
+        None,
+        "🧪 Teste NVIDIA ativo. "
+        "Nenhuma imagem foi gerada."
+    )
+
 
 def obter_ultima_imagem():
 
@@ -386,22 +292,16 @@ def obter_motor_ultima_imagem():
     )
 
 
-# ============================================================
-# 🧹 LIMPAR ÚLTIMA IMAGEM
-# ============================================================
-
 def limpar_ultima_imagem():
 
-    chaves = [
+    for chave in [
         "ultima_imagem",
         "ultima_imagem_caminho",
         "ultimo_prompt_imagem",
         "ultimo_motor_imagem",
-    ]
-
-    for chave in chaves:
+    ]:
 
         st.session_state.pop(
             chave,
             None
-        )
+    )
