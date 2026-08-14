@@ -12,7 +12,7 @@ import streamlit as st
 
 
 # ============================================================
-# ⚙️ CONFIGURAÇÃO
+# ⚙️ CONFIGURAÇÃO NVIDIA
 # ============================================================
 
 NVIDIA_API_URL = (
@@ -23,24 +23,30 @@ MODELO_IMAGEM = "flux.1-dev"
 
 
 # ============================================================
-# 🔐 CHAVE NVIDIA
+# 🔐 OBTER CHAVE NVIDIA
 # ============================================================
 
 def obter_chave_nvidia():
 
+    # Primeiro tenta os Secrets do Streamlit
     try:
+
         chave = st.secrets.get(
             "NVIDIA_API_KEY",
             ""
         )
-    except Exception:
-        chave = ""
 
-    if not chave:
-        chave = os.environ.get(
-            "NVIDIA_API_KEY",
-            ""
-        )
+        if chave:
+            return str(chave).strip()
+
+    except Exception:
+        pass
+
+    # Depois tenta variável de ambiente
+    chave = os.environ.get(
+        "NVIDIA_API_KEY",
+        ""
+    )
 
     return str(chave).strip()
 
@@ -74,14 +80,31 @@ def guardar_ultima_imagem(
     motor=None
 ):
 
-    st.session_state.ultima_imagem = imagem
-    st.session_state.ultima_imagem_caminho = caminho
-    st.session_state.ultimo_prompt_imagem = prompt
-    st.session_state.ultimo_motor_imagem = motor
+    try:
+
+        st.session_state.ultima_imagem = imagem
+
+        st.session_state.ultima_imagem_caminho = (
+            caminho
+        )
+
+        st.session_state.ultimo_prompt_imagem = (
+            prompt
+        )
+
+        st.session_state.ultimo_motor_imagem = (
+            motor
+        )
+
+        return True
+
+    except Exception:
+
+        return False
 
 
 # ============================================================
-# 🎨 GERAR IMAGEM NVIDIA
+# 🎨 GERAR IMAGEM COM NVIDIA
 # ============================================================
 
 def gerar_imagem_nvidia(prompt):
@@ -89,6 +112,7 @@ def gerar_imagem_nvidia(prompt):
     chave = obter_chave_nvidia()
 
     if not chave:
+
         raise RuntimeError(
             "NVIDIA_API_KEY não encontrada "
             "nos Secrets do Streamlit."
@@ -114,76 +138,117 @@ def gerar_imagem_nvidia(prompt):
         timeout=180,
     )
 
+    # --------------------------------------------------------
+    # Verificar resposta
+    # --------------------------------------------------------
+
     if resposta.status_code != 200:
 
+        try:
+            detalhe = resposta.json()
+
+        except Exception:
+            detalhe = resposta.text
+
         raise RuntimeError(
-            f"NVIDIA HTTP {resposta.status_code}: "
-            f"{resposta.text[:3000]}"
+            f"NVIDIA HTTP {resposta.status_code}:\n"
+            f"{detalhe}"
         )
 
-    resultado = resposta.json()
+    # --------------------------------------------------------
+    # Converter resposta
+    # --------------------------------------------------------
 
-    data = resultado.get(
+    try:
+
+        resultado = resposta.json()
+
+    except Exception:
+
+        raise RuntimeError(
+            "A NVIDIA respondeu, mas a resposta "
+            "não está em JSON."
+        )
+
+    # --------------------------------------------------------
+    # Procurar imagens
+    # --------------------------------------------------------
+
+    imagens = resultado.get(
         "data",
         []
     )
 
-    if not data:
+    if not imagens:
+
         raise RuntimeError(
-            "A NVIDIA respondeu, mas não "
-            "retornou nenhuma imagem."
+            "A NVIDIA respondeu corretamente, "
+            "mas não retornou nenhuma imagem."
         )
 
-    primeira = data[0]
+    primeira_imagem = imagens[0]
 
     # --------------------------------------------------------
-    # URL DA IMAGEM
+    # Caso a NVIDIA retorne URL
     # --------------------------------------------------------
 
-    url = primeira.get("url")
+    url_imagem = primeira_imagem.get(
+        "url"
+    )
 
-    if url:
+    if url_imagem:
 
         imagem_resposta = requests.get(
-            url,
+            url_imagem,
             timeout=180
         )
 
         if imagem_resposta.status_code != 200:
+
             raise RuntimeError(
-                "Não foi possível baixar "
-                "a imagem da NVIDIA."
+                "A imagem foi retornada pela NVIDIA, "
+                "mas não foi possível baixá-la."
             )
 
         imagem_bytes = imagem_resposta.content
 
     # --------------------------------------------------------
-    # BASE64
+    # Caso a NVIDIA retorne base64
     # --------------------------------------------------------
 
     else:
 
-        b64 = primeira.get(
+        b64 = primeira_imagem.get(
             "b64_json"
         )
 
         if not b64:
+
             raise RuntimeError(
                 "A resposta da NVIDIA não contém "
                 "URL nem b64_json."
             )
 
-        imagem_bytes = base64.b64decode(
-            b64
-        )
+        try:
+
+            imagem_bytes = base64.b64decode(
+                b64
+            )
+
+        except Exception as erro:
+
+            raise RuntimeError(
+                f"Erro ao decodificar a imagem: {erro}"
+            )
 
     # --------------------------------------------------------
-    # SALVAR IMAGEM
+    # Salvar imagem
     # --------------------------------------------------------
+
+    pasta = obter_pasta_imagens()
 
     caminho = (
-        obter_pasta_imagens()
-        / "ultima_imagem.png"
+        pasta / "ultima_imagem.png"
     )
 
     with open(
@@ -224,7 +289,7 @@ def gerar_imagem(prompt):
             motor=(
                 "NVIDIA NIM / "
                 f"{MODELO_IMAGEM}"
-            )
+            ),
         )
 
         return (
@@ -275,8 +340,7 @@ def mostrar_imagem(prompt):
     )
 
     motor = st.session_state.get(
-        "ultimo_motor_imagem",
-        ""
+        "ultimo_motor_imagem"
     )
 
     if motor:
@@ -289,7 +353,7 @@ def mostrar_imagem(prompt):
 
 
 # ============================================================
-# 🔎 ACESSAR ÚLTIMA IMAGEM
+# 🔎 ACESSO À ÚLTIMA IMAGEM
 # ============================================================
 
 def obter_ultima_imagem():
@@ -340,4 +404,4 @@ def limpar_ultima_imagem():
         st.session_state.pop(
             chave,
             None
-    )
+        )
