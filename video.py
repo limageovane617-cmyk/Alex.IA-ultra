@@ -271,3 +271,8 @@ def status_motores() -> list[dict]:
             x["status"] = "chave Gemini configurada" if gemini else "chave Gemini ausente"
         resultado.append(x)
     return resultado
+  
+print("VIDEO.PY CARREGOU")
+print("gerar_video:", "gerar_video" in globals())
+print("mostrar_configuracao_video:", "mostrar_configuracao_video" in globals())
+print("verificar_magic_hour:", "verificar_magic_hour" in globals())
