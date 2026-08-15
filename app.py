@@ -65,11 +65,11 @@ from personagens import (
 
 from voz import mostrar_audio
 
-from video import (
-    gerar_video,
-    mostrar_configuracao_video,
-    verificar_magic_hour
-)
+import video
+
+gerar_video = video.gerar_video
+mostrar_configuracao_video = video.mostrar_configuracao_video
+verificar_magic_hour = video.verificar_magic_hour
 
 from arquivos import ler_arquivo
 
