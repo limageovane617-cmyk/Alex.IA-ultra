@@ -1,14 +1,12 @@
 # ============================================================
 # 🎬 ALEX IA ULTRA — TESTE DE VÍDEO
-# PIXAZO / VIDU Q3 TURBO
+# FAL.AI + VIDU IMAGE-TO-VIDEO
 # Criado por Geovani
 # ============================================================
 
 import os
-import time
 from pathlib import Path
 
-import requests
 import streamlit as st
 
 
@@ -16,23 +14,10 @@ import streamlit as st
 # ⚙️ CONFIGURAÇÃO
 # ============================================================
 
-MODELO_VIDEO = "vidu-q3-turbo"
+MODELO = "fal-ai/vidu/image-to-video"
 
-PIXAZO_URL = (
-    "https://gateway.pixazo.ai/"
-    "vidu-q3-turbo/v1/image-to-video"
-)
-
-STATUS_URL = (
-    "https://gateway.pixazo.ai/"
-    "v2/requests/status/"
-)
-
-DURACAO = 5
-RESOLUCAO = "720p"
-
-TEMPO_MAXIMO = 600
-INTERVALO_STATUS = 5
+DURACAO_PADRAO = 4
+RESOLUCAO_PADRAO = "720p"
 
 
 # ============================================================
@@ -43,15 +28,16 @@ def obter_api_key():
 
     try:
         chave = st.secrets.get(
-            "PIXAZO_API_KEY",
+            "FAL_KEY",
             ""
         )
     except Exception:
         chave = ""
 
     if not chave:
+
         chave = os.environ.get(
-            "PIXAZO_API_KEY",
+            "FAL_KEY",
             ""
         )
 
@@ -59,10 +45,10 @@ def obter_api_key():
 
 
 # ============================================================
-# 📁 PASTA DE VÍDEOS
+# 📁 PASTA
 # ============================================================
 
-def obter_pasta_videos():
+def obter_pasta():
 
     pasta = Path(
         "/tmp/alex_ia_ultra_videos"
@@ -77,226 +63,196 @@ def obter_pasta_videos():
 
 
 # ============================================================
-# 🎬 SOLICITAR VÍDEO
+# 📦 INSTALAR / IMPORTAR FAL
 # ============================================================
 
-def solicitar_video(
-    imagem_url,
-    prompt
+def obter_fal():
+
+    try:
+
+        from fal_client import (
+            upload_file,
+            subscribe
+        )
+
+        return upload_file, subscribe
+
+    except Exception as erro:
+
+        raise RuntimeError(
+            "A biblioteca fal-client não está instalada.\n\n"
+            "Adicione ao requirements.txt:\n\n"
+            "fal-client\n\n"
+            f"Detalhes: {erro}"
+        )
+
+
+# ============================================================
+# 🎬 GERAR VÍDEO
+# ============================================================
+
+def gerar_video(
+    arquivo,
+    prompt,
+    duracao,
+    resolucao,
+    movimento
 ):
 
     api_key = obter_api_key()
 
     if not api_key:
+
         raise RuntimeError(
-            "PIXAZO_API_KEY não foi encontrada "
+            "FAL_KEY não foi encontrada "
             "nos Secrets do Streamlit."
         )
 
-    headers = {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
-        "Ocp-Apim-Subscription-Key": api_key,
-    }
+    # --------------------------------------------------------
+    # Configurar variável para o fal-client
+    # --------------------------------------------------------
+
+    os.environ["FAL_KEY"] = api_key
+
+    upload_file, subscribe = obter_fal()
+
+    # --------------------------------------------------------
+    # Upload automático da imagem
+    # --------------------------------------------------------
+
+    try:
+
+        imagem_url = upload_file(
+            arquivo
+        )
+
+    except Exception as erro:
+
+        raise RuntimeError(
+            "Não foi possível enviar a imagem "
+            "para o fal.ai:\n\n"
+            f"{erro}"
+        )
+
+    # --------------------------------------------------------
+    # Prompt final
+    # --------------------------------------------------------
+
+    prompt_final = f"""
+{prompt}
+
+MOVIMENTO DE CÂMERA:
+{movimento}
+
+CONTINUIDADE DO PERSONAGEM:
+Manter o personagem principal como referência visual
+durante toda a cena.
+
+Manter consistentes:
+- rosto
+- cabelo
+- aparência
+- roupa
+- acessórios
+- proporções corporais
+- identidade visual
+
+Se a câmera se afastar do personagem e depois retornar,
+o personagem deve continuar sendo o mesmo personagem,
+sem trocar rosto, roupa, cabelo ou características.
+
+Movimentos naturais e cinematográficos.
+Evitar deformações.
+Evitar mudanças bruscas de identidade.
+"""
+
+    # --------------------------------------------------------
+    # Dados
+    # --------------------------------------------------------
 
     dados = {
-        "start_image": imagem_url,
-        "prompt": prompt.strip(),
-        "duration": DURACAO,
-        "resolution": RESOLUCAO,
+        "prompt": prompt_final.strip(),
+
+        "image_url": imagem_url,
+
+        "duration": int(
+            duracao
+        ),
+
+        "resolution": resolucao,
+
+        "movement_amplitude": "auto",
+
         "audio": False,
     }
 
+    # --------------------------------------------------------
+    # Gerar
+    # --------------------------------------------------------
+
     try:
 
-        resposta = requests.post(
-            PIXAZO_URL,
-            headers=headers,
-            json=dados,
-            timeout=120,
+        resultado = subscribe(
+            MODELO,
+            arguments=dados
         )
 
     except Exception as erro:
 
         raise RuntimeError(
-            f"Erro de conexão com a Pixazo:\n{erro}"
+            "Erro na geração pelo fal.ai:\n\n"
+            f"{erro}"
         )
 
-    if resposta.status_code not in [200, 201, 202]:
+    # --------------------------------------------------------
+    # Ler resultado
+    # --------------------------------------------------------
 
-        try:
-            detalhes = resposta.json()
-        except Exception:
-            detalhes = resposta.text
+    if not isinstance(
+        resultado,
+        dict
+    ):
 
         raise RuntimeError(
-            f"Pixazo retornou HTTP "
-            f"{resposta.status_code}:\n\n"
-            f"{detalhes}"
+            "O fal.ai retornou uma resposta "
+            "em formato inesperado:\n\n"
+            f"{resultado}"
         )
 
-    try:
-        resultado = resposta.json()
-    except Exception as erro:
-
-        raise RuntimeError(
-            f"A Pixazo não retornou JSON válido:\n{erro}"
-        )
-
-    request_id = resultado.get(
-        "request_id"
+    video = resultado.get(
+        "video"
     )
 
-    if not request_id:
+    if not video:
 
         raise RuntimeError(
-            "A Pixazo não retornou request_id.\n\n"
-            f"Resposta recebida:\n{resultado}"
+            "O fal.ai terminou a geração, "
+            "mas não retornou o vídeo.\n\n"
+            f"Resposta:\n{resultado}"
         )
 
-    return request_id
+    video_url = video.get(
+        "url"
+    )
 
+    if not video_url:
 
-# ============================================================
-# ⏳ AGUARDAR GERAÇÃO
-# ============================================================
-
-def esperar_video(request_id):
-
-    api_key = obter_api_key()
-
-    headers = {
-        "Ocp-Apim-Subscription-Key": api_key,
-    }
-
-    inicio = time.time()
-
-    while True:
-
-        if time.time() - inicio > TEMPO_MAXIMO:
-
-            raise RuntimeError(
-                "Tempo máximo de espera atingido."
-            )
-
-        url = STATUS_URL + request_id
-
-        try:
-
-            resposta = requests.get(
-                url,
-                headers=headers,
-                timeout=60,
-            )
-
-        except Exception as erro:
-
-            raise RuntimeError(
-                f"Erro ao consultar o status:\n{erro}"
-            )
-
-        if resposta.status_code != 200:
-
-            try:
-                detalhes = resposta.json()
-            except Exception:
-                detalhes = resposta.text
-
-            raise RuntimeError(
-                f"Erro ao consultar status "
-                f"HTTP {resposta.status_code}:\n\n"
-                f"{detalhes}"
-            )
-
-        try:
-            resultado = resposta.json()
-        except Exception as erro:
-
-            raise RuntimeError(
-                f"Resposta de status inválida:\n{erro}"
-            )
-
-        status = str(
-            resultado.get(
-                "status",
-                ""
-            )
-        ).upper()
-
-        # ----------------------------------------------------
-        # CONCLUÍDO
-        # ----------------------------------------------------
-
-        if status == "COMPLETED":
-
-            output = resultado.get(
-                "output"
-            )
-
-            if not isinstance(
-                output,
-                dict
-            ):
-
-                raise RuntimeError(
-                    "A geração terminou, "
-                    "mas o campo output não foi encontrado."
-                )
-
-            media_url = output.get(
-                "media_url"
-            )
-
-            if not media_url:
-
-                raise RuntimeError(
-                    "A geração terminou, "
-                    "mas a URL do vídeo não foi encontrada."
-                )
-
-            if isinstance(
-                media_url,
-                list
-            ):
-
-                return media_url[0]
-
-            return media_url
-
-        # ----------------------------------------------------
-        # ERRO
-        # ----------------------------------------------------
-
-        if status in [
-            "FAILED",
-            "ERROR"
-        ]:
-
-            erro = resultado.get(
-                "error",
-                "Erro desconhecido."
-            )
-
-            raise RuntimeError(
-                f"A Pixazo informou um erro:\n{erro}"
-            )
-
-        time.sleep(
-            INTERVALO_STATUS
+        raise RuntimeError(
+            "A URL do vídeo não foi encontrada.\n\n"
+            f"Resposta:\n{resultado}"
         )
 
+    # --------------------------------------------------------
+    # Baixar vídeo
+    # --------------------------------------------------------
 
-# ============================================================
-# 📥 BAIXAR VÍDEO
-# ============================================================
-
-def baixar_video(video_url):
+    import requests
 
     try:
 
         resposta = requests.get(
             video_url,
-            timeout=180,
+            timeout=180
         )
 
     except Exception as erro:
@@ -308,62 +264,75 @@ def baixar_video(video_url):
     if resposta.status_code != 200:
 
         raise RuntimeError(
-            "Não foi possível baixar o vídeo.\n"
+            "Falha ao baixar o vídeo.\n"
             f"HTTP {resposta.status_code}"
         )
 
+    # --------------------------------------------------------
+    # Salvar
+    # --------------------------------------------------------
+
     caminho = (
-        obter_pasta_videos()
-        / "video_pixazo.mp4"
+        obter_pasta()
+        / "video_fal_vidu.mp4"
     )
 
-    caminho.write_bytes(
-        resposta.content
-    )
+    try:
+
+        caminho.write_bytes(
+            resposta.content
+        )
+
+    except Exception as erro:
+
+        raise RuntimeError(
+            f"Não foi possível salvar o vídeo:\n{erro}"
+        )
 
     return str(caminho)
 
 
 # ============================================================
-# 🖥️ CONFIGURAÇÃO DA PÁGINA
+# 🖥️ INTERFACE
 # ============================================================
 
 st.set_page_config(
-    page_title="Teste Vídeo Pixazo",
+    page_title="Teste Vidu — fal.ai",
     page_icon="🎬",
     layout="centered"
 )
 
 
 # ============================================================
-# 🎬 TÍTULO
+# 🎬 CABEÇALHO
 # ============================================================
 
 st.title(
-    "🎬 Teste de Vídeo — Pixazo"
+    "🎬 TESTE DE VÍDEO — FAL.AI"
 )
 
 st.write(
-    "Teste isolado do Vidu Q3 Turbo "
-    "através da API da Pixazo."
+    "Teste isolado de geração de vídeo "
+    "usando Vidu Image-to-Video."
 )
 
 st.info(
-    f"🎥 Motor: Vidu Q3 Turbo\n\n"
-    f"⏱️ Duração: {DURACAO} segundos\n\n"
-    f"📺 Resolução: {RESOLUCAO}"
+    "🎥 Motor: Vidu Image-to-Video\n\n"
+    "🏢 Provedor: fal.ai\n\n"
+    f"⏱️ Duração inicial: {DURACAO_PADRAO} segundos\n\n"
+    f"📺 Resolução: {RESOLUCAO_PADRAO}"
 )
 
 
 # ============================================================
-# 🖼️ UPLOAD LOCAL
+# 🖼️ IMAGEM
 # ============================================================
 
 st.subheader(
-    "🖼️ Imagem do personagem"
+    "🖼️ Imagem inicial"
 )
 
-arquivo_imagem = st.file_uploader(
+arquivo = st.file_uploader(
     "Escolha uma imagem do seu celular:",
     type=[
         "png",
@@ -373,34 +342,13 @@ arquivo_imagem = st.file_uploader(
     ]
 )
 
-if arquivo_imagem:
+if arquivo:
 
     st.image(
-        arquivo_imagem,
+        arquivo,
         caption="Imagem selecionada",
         use_container_width=True
     )
-
-
-# ============================================================
-# 🌐 URL PÚBLICA
-# ============================================================
-
-st.subheader(
-    "🌐 URL pública da imagem"
-)
-
-imagem_url = st.text_input(
-    "Cole aqui a URL pública:",
-    placeholder="https://site.com/imagem.png"
-)
-
-st.caption(
-    "A Pixazo precisa conseguir acessar a imagem "
-    "pela internet. O upload acima serve para "
-    "você visualizar a imagem, mas o Vidu precisa "
-    "receber uma URL pública."
-)
 
 
 # ============================================================
@@ -408,48 +356,96 @@ st.caption(
 # ============================================================
 
 st.subheader(
-    "🎥 Movimento da cena"
+    "📝 Descrição da cena"
 )
 
 prompt = st.text_area(
-    "Descreva o que deve acontecer:",
+    "O que deve acontecer?",
     value=(
-        "O personagem começa parado e depois "
-        "caminha lentamente para frente. "
-        "A câmera faz um movimento cinematográfico "
-        "suave, mantendo o personagem como referência "
-        "visual principal. "
-        "Manter exatamente o mesmo rosto, cabelo, "
-        "roupa, aparência e características do personagem "
-        "durante toda a cena. "
-        "Movimentos naturais e realistas, "
-        "iluminação cinematográfica profissional."
+        "Um personagem futurista caminha "
+        "lentamente por uma cidade cyberpunk "
+        "durante a noite. "
+        "As luzes neon refletem no chão molhado. "
+        "A cena possui aparência cinematográfica "
+        "e realista."
     ),
-    height=200
+    height=180
 )
 
 
 # ============================================================
-# 🎥 GERAR
+# 🎥 CÂMERA
+# ============================================================
+
+st.subheader(
+    "🎥 Movimento da câmera"
+)
+
+movimento = st.selectbox(
+    "Escolha o movimento:",
+    [
+        "Câmera acompanha o personagem suavemente.",
+        "Travelling cinematográfico para frente.",
+        "Travelling lateral acompanhando o personagem.",
+        "Zoom cinematográfico lento.",
+        "Câmera se afasta lentamente e depois retorna ao personagem.",
+        "Movimento circular suave ao redor do personagem.",
+        "Plano cinematográfico estável."
+    ]
+)
+
+
+# ============================================================
+# ⏱️ DURAÇÃO
+# ============================================================
+
+duracao = st.selectbox(
+    "⏱️ Duração:",
+    [
+        4,
+        5,
+        6,
+        7,
+        8
+    ],
+    index=0
+)
+
+
+# ============================================================
+# 📺 RESOLUÇÃO
+# ============================================================
+
+resolucao = st.selectbox(
+    "📺 Resolução:",
+    [
+        "720p",
+        "1080p"
+    ],
+    index=0
+)
+
+
+# ============================================================
+# 🎬 BOTÃO
 # ============================================================
 
 if st.button(
-    "🎬 Gerar vídeo",
+    "🎬 GERAR VÍDEO",
     type="primary",
     use_container_width=True
 ):
 
-    if not imagem_url.strip():
+    if arquivo is None:
 
         st.warning(
-            "⚠️ Para este primeiro teste, "
-            "precisamos de uma URL pública da imagem."
+            "⚠️ Escolha uma imagem primeiro."
         )
 
     elif not prompt.strip():
 
         st.warning(
-            "⚠️ Digite o movimento do vídeo."
+            "⚠️ Digite uma descrição para o vídeo."
         )
 
     else:
@@ -457,56 +453,38 @@ if st.button(
         try:
 
             with st.spinner(
-                "🎬 Enviando pedido para a Pixazo..."
+                "📤 Enviando imagem..."
             ):
 
-                request_id = solicitar_video(
-                    imagem_url,
-                    prompt
-                )
-
-            st.success(
-                "✅ Pedido enviado para a Pixazo!"
-            )
-
-            st.caption(
-                f"ID: {request_id}"
-            )
-
-            with st.spinner(
-                "⏳ Gerando vídeo... aguarde."
-            ):
-
-                video_url = esperar_video(
-                    request_id
+                caminho = gerar_video(
+                    arquivo=arquivo,
+                    prompt=prompt,
+                    duracao=duracao,
+                    resolucao=resolucao,
+                    movimento=movimento
                 )
 
             st.success(
                 "🎉 Vídeo gerado com sucesso!"
             )
 
-            with st.spinner(
-                "📥 Baixando vídeo..."
-            ):
-
-                caminho = baixar_video(
-                    video_url
-                )
-
             st.video(
                 caminho
             )
 
             st.caption(
-                "🎥 Pixazo / Vidu Q3 Turbo"
+                "🎥 Motor utilizado: "
+                "fal.ai / Vidu"
             )
 
             st.download_button(
-                "📥 Baixar vídeo",
+                label="📥 Baixar vídeo",
                 data=Path(
                     caminho
                 ).read_bytes(),
-                file_name="video_pixazo.mp4",
+                file_name=(
+                    "video_fal_vidu.mp4"
+                ),
                 mime="video/mp4",
                 use_container_width=True
             )
