@@ -1,277 +1,753 @@
-# ============================================================
-# VIDEO.PY — GERENCIADOR AUTOMÁTICO DE VÍDEO
-# Alex IA Ultra
-# ============================================================
+"""
+video.py
+Gerenciador de geração de vídeos do Alex IA Ultra.
 
-import os
-import time
+Objetivos:
+- Trabalhar com vídeos de 8 segundos por padrão.
+- Suportar diferentes câmeras cinematográficas.
+- Permitir vários motores de vídeo.
+- Usar fallback automático entre motores.
+- NÃO considerar uma tentativa como sucesso se nenhum
+  arquivo de vídeo real tiver sido recebido.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
 from pathlib import Path
-
-import requests
-import streamlit as st
-
-try:
-    from gradio_client import Client, handle_file
-except ImportError:
-    Client = None
-    handle_file = None
-
-NOME_MODULO = "Alex IA Ultra — Gerenciador de Vídeo"
-MOTORES_VIDEO = ["Magic Hour — LTX-2.3", "LTX-2.3 — Hugging Face"]
-CAMERAS = ["Sony FX5", "Sony FX6", "Canon EOS C80", "ARRI Alexa Mini LF"]
-PROPORCOES = ["1:1", "16:9", "9:16"]
-DURACAO_PADRAO = 5
-LTX_HF_SPACE = "https://huggingface.co/spaces/Lightricks/LTX-2-3"
-MAGIC_HOUR_BASE_URL = "https://api.magichour.ai/v1"
-MAGIC_HOUR_MODELO = "ltx-2.3"
-MAGIC_HOUR_RESOLUCAO = "720p"
-MAGIC_HOUR_DURACAO = 5
-PASTA = Path("/tmp/alex_ia_ultra_videos")
-PASTA.mkdir(parents=True, exist_ok=True)
+from typing import Any, Callable, Optional
+import time
 
 
-def obter_api_key_magichour():
+# ============================================================
+# CONFIGURAÇÕES
+# ============================================================
+
+PASTA_VIDEOS = Path("videos_gerados")
+PASTA_VIDEOS.mkdir(parents=True, exist_ok=True)
+
+DURACAO_PADRAO = 8
+
+CAMERAS = [
+    "Sony FX5",
+    "Sony FX6",
+    "Canon EOS C80",
+    "ARRI Alexa Mini LF",
+]
+
+PROPORCOES = [
+    "16:9",
+    "9:16",
+    "1:1",
+]
+
+
+# ============================================================
+# ESTRUTURAS
+# ============================================================
+
+@dataclass
+class ResultadoVideo:
+    sucesso: bool
+    motor: str
+    arquivo: Optional[str] = None
+    mensagem: str = ""
+    erro: Optional[str] = None
+
+
+@dataclass
+class MotorVideo:
+    nome: str
+    funcao: Callable[..., Any]
+    ativo: bool = True
+
+
+# ============================================================
+# MOTORES
+# ============================================================
+
+MOTORES: list[MotorVideo] = []
+
+
+def registrar_motor(
+    nome: str,
+    funcao: Callable[..., Any],
+    ativo: bool = True,
+) -> None:
+    """
+    Registra um motor de geração de vídeo.
+    """
+
+    # Evita registrar o mesmo motor duas vezes.
+
+    for motor in MOTORES:
+
+        if motor.nome.lower() == nome.lower():
+
+            motor.funcao = funcao
+            motor.ativo = ativo
+
+            return
+
+    MOTORES.append(
+        MotorVideo(
+            nome=nome,
+            funcao=funcao,
+            ativo=ativo,
+        )
+    )
+
+
+def remover_motor(nome: str) -> bool:
+
+    global MOTORES
+
+    quantidade_antes = len(MOTORES)
+
+    MOTORES = [
+        motor
+        for motor in MOTORES
+        if motor.nome.lower() != nome.lower()
+    ]
+
+    return len(MOTORES) < quantidade_antes
+
+
+def listar_motores() -> list[str]:
+
+    return [
+        motor.nome
+        for motor in MOTORES
+        if motor.ativo
+    ]
+
+
+# ============================================================
+# UTILITÁRIOS
+# ============================================================
+
+def limpar_texto(valor: Any) -> str:
+
+    if valor is None:
+        return ""
+
+    return str(valor).strip()
+
+
+def validar_camera(camera: str) -> str:
+
+    camera = limpar_texto(camera)
+
+    if camera in CAMERAS:
+        return camera
+
+    return "Sony FX6"
+
+
+def validar_proporcao(proporcao: str) -> str:
+
+    proporcao = limpar_texto(proporcao)
+
+    if proporcao in PROPORCOES:
+        return proporcao
+
+    return "16:9"
+
+
+def validar_duracao(duracao: Any) -> int:
+
     try:
-        chave = st.secrets.get("MAGIC_HOUR_API_KEY", "")
+
+        duracao = int(duracao)
+
     except Exception:
-        chave = ""
-    if not chave:
-        chave = os.environ.get("MAGIC_HOUR_API_KEY", "")
-    return str(chave).strip()
+
+        duracao = DURACAO_PADRAO
+
+    if duracao <= 0:
+        duracao = DURACAO_PADRAO
+
+    return duracao
 
 
-def verificar_magic_hour():
-    chave = obter_api_key_magichour()
-    if chave:
-        return True, "MAGIC_HOUR_API_KEY encontrada."
-    return False, "MAGIC_HOUR_API_KEY não encontrada nos Secrets."
+# ============================================================
+# PROMPT
+# ============================================================
+
+def montar_prompt(
+    descricao: str,
+    camera: str = "Sony FX6",
+    proporcao: str = "16:9",
+    duracao: int = 8,
+) -> str:
+
+    descricao = limpar_texto(descricao)
+
+    if not descricao:
+
+        raise ValueError(
+            "A descrição do vídeo não pode estar vazia."
+        )
+
+    camera = validar_camera(camera)
+
+    proporcao = validar_proporcao(proporcao)
+
+    duracao = validar_duracao(duracao)
+
+    prompt = f"""
+Crie um vídeo cinematográfico e realista.
+
+CENA:
+{descricao}
+
+CÂMERA:
+{camera}
+
+PROPORÇÃO:
+{proporcao}
+
+DURAÇÃO:
+{duracao} segundos
+
+DIREÇÃO:
+- aparência cinematográfica;
+- iluminação realista;
+- movimentos naturais;
+- câmera estável;
+- continuidade visual;
+- detalhes realistas;
+- personagens consistentes;
+- ambiente coerente;
+- física natural;
+- sem texto aleatório na imagem;
+- sem deformações;
+- sem mudanças desnecessárias de identidade.
+
+A câmera deve permanecer consistente durante toda a cena.
+"""
+
+    return prompt.strip()
 
 
-def headers_magichour():
-    chave = obter_api_key_magichour()
-    if not chave:
-        raise RuntimeError("MAGIC_HOUR_API_KEY não foi encontrada nos Secrets do Streamlit.")
-    return {"Authorization": f"Bearer {chave}", "Accept": "application/json", "Content-Type": "application/json"}
+# ============================================================
+# ARQUIVOS
+# ============================================================
+
+def gerar_nome_arquivo(prefixo: str = "video") -> str:
+
+    timestamp = int(time.time() * 1000)
+
+    return f"{prefixo}_{timestamp}.mp4"
 
 
-def salvar_video(conteudo, nome="video.mp4"):
-    caminho = PASTA / nome
-    caminho.write_bytes(conteudo)
+def salvar_bytes(
+    dados: bytes,
+    nome_arquivo: Optional[str] = None,
+) -> str:
+
+    if not dados:
+
+        raise RuntimeError(
+            "O motor retornou dados vazios."
+        )
+
+    if not nome_arquivo:
+
+        nome_arquivo = gerar_nome_arquivo()
+
+    nome_arquivo = Path(nome_arquivo).name
+
+    if not nome_arquivo.lower().endswith(".mp4"):
+
+        nome_arquivo += ".mp4"
+
+    caminho = PASTA_VIDEOS / nome_arquivo
+
+    caminho.write_bytes(dados)
+
+    if not caminho.exists():
+
+        raise RuntimeError(
+            "O arquivo não foi criado."
+        )
+
+    if caminho.stat().st_size <= 0:
+
+        try:
+            caminho.unlink()
+        except Exception:
+            pass
+
+        raise RuntimeError(
+            "O arquivo de vídeo foi criado vazio."
+        )
+
     return str(caminho)
 
 
-def _normalizar_imagem(imagem_bytes, nome_imagem):
-    if not imagem_bytes:
-        return None
-    ext = Path(nome_imagem or "imagem.png").suffix.lower() or ".png"
-    caminho = PASTA / f"imagem_ltx{ext}"
-    caminho.write_bytes(imagem_bytes)
-    return caminho
+def copiar_video(
+    origem: str | Path,
+    nome_arquivo: Optional[str] = None,
+) -> str:
 
+    origem = Path(origem)
 
-def gerar_ltx_huggingface(prompt, duration=5.0, height=1024, width=1536,
-                          imagem_bytes=None, nome_imagem="imagem.png"):
-    if Client is None:
-        raise RuntimeError("gradio_client não está instalado. Adicione gradio_client ao requirements.txt.")
-    if not prompt or not prompt.strip():
-        raise ValueError("O prompt do vídeo está vazio.")
+    if not origem.exists():
 
-    caminho_imagem = _normalizar_imagem(imagem_bytes, nome_imagem)
-    client = Client(LTX_HF_SPACE)
+        raise FileNotFoundError(
+            f"Arquivo não encontrado: {origem}"
+        )
 
-    # A interface oficial atual usa input_image, prompt, duration,
-    # enhance_prompt, seed, randomize_seed, height e width em /generate_video.
-    resultado = client.predict(
-        input_image=str(caminho_imagem) if caminho_imagem else None,
-        prompt=prompt.strip(),
-        duration=float(max(1.0, min(float(duration), 10.0))),
-        enhance_prompt=True,
-        seed=42,
-        randomize_seed=True,
-        height=int(height),
-        width=int(width),
-        api_name="/generate_video",
+    if not origem.is_file():
+
+        raise RuntimeError(
+            "O caminho informado não é um arquivo."
+        )
+
+    if origem.stat().st_size <= 0:
+
+        raise RuntimeError(
+            "O arquivo de origem está vazio."
+        )
+
+    if not nome_arquivo:
+
+        nome_arquivo = origem.name
+
+    destino = PASTA_VIDEOS / Path(nome_arquivo).name
+
+    destino.write_bytes(
+        origem.read_bytes()
     )
 
-    if isinstance(resultado, (tuple, list)):
-        caminho_video = resultado[0] if resultado else None
-        seed = resultado[1] if len(resultado) > 1 else None
-    else:
-        caminho_video, seed = resultado, None
-
-    if not caminho_video:
-        raise RuntimeError("LTX-2.3 do Hugging Face não retornou um vídeo.")
-
-    return {"motor": "LTX-2.3 — Hugging Face", "video": str(caminho_video), "seed": seed}
+    return str(destino)
 
 
-def obter_url_upload(extensao):
-    extensao = str(extensao).lower().lstrip(".")
-    formatos = {"png", "jpg", "jpeg", "webp", "jfif", "heic", "heif", "avif", "bmp", "tif", "tiff"}
-    if extensao not in formatos:
-        raise RuntimeError(f"Formato de imagem não suportado: {extensao}")
-    resposta = requests.post(
-        f"{MAGIC_HOUR_BASE_URL}/files/upload-urls",
-        headers=headers_magichour(),
-        json={"items": [{"type": "image", "extension": extensao}]},
-        timeout=60,
-    )
-    if resposta.status_code != 200:
-        raise RuntimeError(f"Magic Hour HTTP {resposta.status_code}: {resposta.text}")
-    dados = resposta.json()
-    itens = dados.get("items") or []
-    if not itens or not itens[0].get("upload_url") or not itens[0].get("file_path"):
-        raise RuntimeError(f"Resposta de upload inesperada do Magic Hour: {dados}")
-    return itens[0]["upload_url"], itens[0]["file_path"]
+# ============================================================
+# EXTRAÇÃO DA RESPOSTA DOS MOTORES
+# ============================================================
 
+def extrair_video(
+    resposta: Any,
+    nome_arquivo: Optional[str] = None,
+) -> str:
 
-def enviar_imagem_magichour(imagem_bytes, nome_arquivo):
-    ext = Path(nome_arquivo or "imagem.png").suffix.lower().lstrip(".") or "png"
-    upload_url, file_path = obter_url_upload(ext)
-    resposta = requests.put(upload_url, data=imagem_bytes, timeout=120)
-    if resposta.status_code not in (200, 201, 204):
-        raise RuntimeError(f"Falha no upload da imagem: HTTP {resposta.status_code}: {resposta.text}")
-    return file_path
+    """
+    Tenta localizar o vídeo retornado por diferentes SDKs.
 
+    IMPORTANTE:
+    Se não existir um vídeo verdadeiro, esta função gera erro.
+    """
 
-def criar_projeto_magichour(file_path, prompt):
-    dados = {
-        "name": "Alex IA Ultra",
-        "end_seconds": MAGIC_HOUR_DURACAO,
-        "model": MAGIC_HOUR_MODELO,
-        "resolution": MAGIC_HOUR_RESOLUCAO,
-        "audio": False,
-        "style": {"prompt": prompt.strip()},
-        "assets": {"image_file_path": file_path},
-    }
-    resposta = requests.post(
-        f"{MAGIC_HOUR_BASE_URL}/image-to-video",
-        headers=headers_magichour(), json=dados, timeout=120,
-    )
-    if resposta.status_code not in (200, 201, 202):
-        raise RuntimeError(f"Magic Hour HTTP {resposta.status_code}: {resposta.text}")
-    dados_resp = resposta.json()
-    projeto_id = dados_resp.get("id")
-    if not projeto_id:
-        raise RuntimeError(f"Magic Hour não retornou ID: {dados_resp}")
-    return projeto_id, dados_resp
+    if resposta is None:
 
+        raise RuntimeError(
+            "O motor retornou uma resposta vazia."
+        )
 
-def consultar_projeto_magichour(projeto_id):
-    ultimo = None
-    for url in (
-        f"{MAGIC_HOUR_BASE_URL}/video-projects/{projeto_id}",
-        f"{MAGIC_HOUR_BASE_URL}/image-to-video/{projeto_id}",
+    # --------------------------------------------------------
+    # BYTES
+    # --------------------------------------------------------
+
+    if isinstance(resposta, bytes):
+
+        return salvar_bytes(
+            resposta,
+            nome_arquivo,
+        )
+
+    if isinstance(resposta, bytearray):
+
+        return salvar_bytes(
+            bytes(resposta),
+            nome_arquivo,
+        )
+
+    # --------------------------------------------------------
+    # CAMINHO
+    # --------------------------------------------------------
+
+    if isinstance(
+        resposta,
+        (str, Path),
     ):
+
+        caminho = Path(resposta)
+
+        if caminho.exists():
+
+            return copiar_video(
+                caminho,
+                nome_arquivo,
+            )
+
+    # --------------------------------------------------------
+    # DICIONÁRIO
+    # --------------------------------------------------------
+
+    if isinstance(resposta, dict):
+
+        possiveis_chaves = [
+            "video",
+            "video_bytes",
+            "bytes",
+            "content",
+            "data",
+            "file",
+            "output",
+            "path",
+            "filename",
+            "uri",
+        ]
+
+        for chave in possiveis_chaves:
+
+            if chave not in resposta:
+                continue
+
+            valor = resposta[chave]
+
+            if valor is None:
+                continue
+
+            try:
+
+                return extrair_video(
+                    valor,
+                    nome_arquivo,
+                )
+
+            except Exception:
+
+                continue
+
+    # --------------------------------------------------------
+    # OBJETOS DE SDK
+    # --------------------------------------------------------
+
+    atributos = [
+        "video",
+        "video_bytes",
+        "bytes",
+        "content",
+        "data",
+        "file",
+        "output",
+        "path",
+        "filename",
+    ]
+
+    for atributo in atributos:
+
         try:
-            resposta = requests.get(url, headers=headers_magichour(), timeout=60)
-            if resposta.status_code == 200:
-                return resposta.json()
-            ultimo = f"HTTP {resposta.status_code}: {resposta.text}"
-        except Exception as erro:
-            ultimo = str(erro)
-    raise RuntimeError(f"Não foi possível consultar o projeto Magic Hour: {ultimo}")
 
+            valor = getattr(
+                resposta,
+                atributo,
+                None,
+            )
 
-def encontrar_download_magichour(dados):
-    if not isinstance(dados, dict):
-        return None
-    chaves = ("video_url", "download_url", "output_url", "url")
-    for chave in chaves:
-        valor = dados.get(chave)
-        if isinstance(valor, str) and valor.startswith("http"):
-            return valor
-    for chave in ("downloads", "output", "outputs", "result"):
-        valor = dados.get(chave)
-        itens = valor.values() if isinstance(valor, dict) else valor if isinstance(valor, list) else []
-        for item in itens:
-            if isinstance(item, str) and item.startswith("http"):
-                return item
-            if isinstance(item, dict):
-                for sub in chaves:
-                    u = item.get(sub)
-                    if isinstance(u, str) and u.startswith("http"):
-                        return u
-    return None
+        except Exception:
 
+            valor = None
 
-def baixar_video_magichour(url):
-    resposta = requests.get(url, timeout=180)
-    if resposta.status_code != 200:
-        raise RuntimeError(f"Falha ao baixar o vídeo: HTTP {resposta.status_code}")
-    return salvar_video(resposta.content, f"video_magichour_{int(time.time())}.mp4")
+        if valor is None:
+            continue
 
-
-def gerar_magichour(imagem_bytes, nome_arquivo, prompt, timeout_segundos=300):
-    if not imagem_bytes:
-        raise ValueError("O Magic Hour precisa de uma imagem.")
-    if not obter_api_key_magichour():
-        raise RuntimeError("MAGIC_HOUR_API_KEY não configurada.")
-    file_path = enviar_imagem_magichour(imagem_bytes, nome_arquivo)
-    projeto_id, resultado = criar_projeto_magichour(file_path, prompt)
-    inicio = time.time()
-    while True:
-        video_url = encontrar_download_magichour(resultado)
-        if video_url:
-            return {"motor": "Magic Hour — LTX-2.3", "video": baixar_video_magichour(video_url), "projeto_id": projeto_id, "url": video_url}
-        status = str(resultado.get("status", "processing")).lower() if isinstance(resultado, dict) else "processing"
-        if status in {"failed", "error", "cancelled"}:
-            raise RuntimeError(f"Magic Hour falhou: {resultado}")
-        if time.time() - inicio >= timeout_segundos:
-            raise RuntimeError(f"Tempo limite do Magic Hour atingido. Última resposta: {resultado}")
-        time.sleep(5)
-        resultado = consultar_projeto_magichour(projeto_id)
-
-
-def gerar_video_automatico(prompt, imagem_bytes=None, nome_imagem="imagem.png", duracao=5.0, width=1536, height=1024):
-    if not prompt or not prompt.strip():
-        raise ValueError("O prompt do vídeo está vazio.")
-    erros = []
-
-    # Com imagem, Magic Hour é o primeiro motor. Se falhar, NÃO interrompe:
-    # o LTX-2.3 do Hugging Face recebe a oportunidade de fazer o fallback.
-    if imagem_bytes and obter_api_key_magichour():
         try:
-            resultado = gerar_magichour(imagem_bytes, nome_imagem, prompt)
-            resultado.update(fallback=False, erros_anteriores=erros)
-            return resultado
-        except Exception as erro:
-            erros.append(f"Magic Hour: {erro}")
-    elif imagem_bytes:
-        erros.append("Magic Hour: MAGIC_HOUR_API_KEY não configurada; usando fallback.")
+
+            return extrair_video(
+                valor,
+                nome_arquivo,
+            )
+
+        except Exception:
+
+            continue
+
+    # --------------------------------------------------------
+    # MÉTODO READ
+    # --------------------------------------------------------
+
+    if hasattr(resposta, "read"):
+
+        try:
+
+            dados = resposta.read()
+
+            if dados:
+
+                return salvar_bytes(
+                    dados,
+                    nome_arquivo,
+                )
+
+        except Exception:
+            pass
+
+    # --------------------------------------------------------
+    # FALHA
+    # --------------------------------------------------------
+
+    raise RuntimeError(
+        "O motor respondeu, mas não entregou um arquivo "
+        "de vídeo válido."
+    )
+
+
+# ============================================================
+# GERADOR PRINCIPAL
+# ============================================================
+
+def gerar_video(
+    descricao: str,
+    camera: str = "Sony FX6",
+    proporcao: str = "16:9",
+    duracao: int = DURACAO_PADRAO,
+    nome_arquivo: Optional[str] = None,
+) -> ResultadoVideo:
+
+    """
+    Tenta gerar o vídeo usando todos os motores ativos.
+
+    Se um motor falhar:
+
+        Motor 1 -> falhou
+        Motor 2 -> tenta
+        Motor 3 -> tenta
+
+    Só retorna sucesso quando um arquivo real é encontrado.
+    """
 
     try:
-        resultado = gerar_ltx_huggingface(
-            prompt=prompt, duration=duracao, width=width, height=height,
-            imagem_bytes=imagem_bytes, nome_imagem=nome_imagem,
+
+        prompt = montar_prompt(
+            descricao=descricao,
+            camera=camera,
+            proporcao=proporcao,
+            duracao=duracao,
         )
-        resultado.update(fallback=bool(erros), erros_anteriores=erros)
-        return resultado
+
     except Exception as erro:
-        erros.append(f"LTX-2.3 Hugging Face: {erro}")
 
-    raise RuntimeError("❌ NENHUM MOTOR DE VÍDEO CONSEGUIU GERAR O VÍDEO.\n\n" + "\n\n".join(erros))
+        return ResultadoVideo(
+            sucesso=False,
+            motor="nenhum",
+            mensagem="Não foi possível preparar o vídeo.",
+            erro=str(erro),
+        )
+
+    motores_ativos = [
+        motor
+        for motor in MOTORES
+        if motor.ativo
+    ]
+
+    if not motores_ativos:
+
+        return ResultadoVideo(
+            sucesso=False,
+            motor="nenhum",
+            mensagem=(
+                "NENHUM MOTOR DE VÍDEO ESTÁ CONFIGURADO."
+            ),
+            erro=(
+                "Adicione os motores usando "
+                "registrar_motor()."
+            ),
+        )
+
+    if not nome_arquivo:
+
+        nome_arquivo = gerar_nome_arquivo()
+
+    erros = []
+
+    # ========================================================
+    # FALLBACK
+    # ========================================================
+
+    for numero, motor in enumerate(
+        motores_ativos,
+        start=1,
+    ):
+
+        try:
+
+            print(
+                f"[VÍDEO] Tentando motor "
+                f"{numero}/{len(motores_ativos)}: "
+                f"{motor.nome}"
+            )
+
+            resposta = motor.funcao(
+                prompt=prompt,
+                duracao=duracao,
+                proporcao=proporcao,
+                camera=camera,
+            )
+
+            arquivo = extrair_video(
+                resposta,
+                nome_arquivo,
+            )
+
+            caminho = Path(arquivo)
+
+            if not caminho.exists():
+
+                raise RuntimeError(
+                    "O arquivo retornado não existe."
+                )
+
+            if caminho.stat().st_size <= 0:
+
+                raise RuntimeError(
+                    "O arquivo retornado está vazio."
+                )
+
+            return ResultadoVideo(
+                sucesso=True,
+                motor=motor.nome,
+                arquivo=str(caminho),
+                mensagem=(
+                    f"Vídeo gerado com sucesso "
+                    f"pelo motor {motor.nome}."
+                ),
+            )
+
+        except Exception as erro:
+
+            mensagem_erro = (
+                f"{motor.nome}: "
+                f"{type(erro).__name__}: "
+                f"{erro}"
+            )
+
+            print(
+                f"[VÍDEO] FALHA: "
+                f"{mensagem_erro}"
+            )
+
+            erros.append(
+                mensagem_erro
+            )
+
+            continue
+
+    # ========================================================
+    # TODOS FALHARAM
+    # ========================================================
+
+    return ResultadoVideo(
+        sucesso=False,
+        motor="nenhum",
+        mensagem=(
+            "❌ NENHUM MOTOR DE VÍDEO "
+            "CONSEGUIU GERAR O VÍDEO."
+        ),
+        erro="\n".join(erros),
+    )
 
 
-def mostrar_configuracao_video():
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        camera = st.selectbox("🎥 Câmera", CAMERAS, key="video_camera")
-    with col2:
-        proporcao = st.selectbox("📐 Proporção", PROPORCOES, index=1, key="video_proporcao")
-    with col3:
-        duracao = st.slider("⏱️ Duração", 1.0, 10.0, float(DURACAO_PADRAO), 1.0, key="video_duracao")
-    return camera, proporcao, duracao
+# ============================================================
+# GERAÇÃO DE VÁRIOS CLIPES
+# ============================================================
+
+def gerar_clipes(
+    descricoes: list[str],
+    camera: str = "Sony FX6",
+    proporcao: str = "16:9",
+    duracao: int = 8,
+) -> list[ResultadoVideo]:
+
+    """
+    Gera vários clipes.
+
+    Isso permite montar vídeos maiores usando vários
+    segmentos de 8 segundos.
+    """
+
+    resultados = []
+
+    for indice, descricao in enumerate(
+        descricoes,
+        start=1,
+    ):
+
+        nome = (
+            f"clipe_{indice:03d}.mp4"
+        )
+
+        resultado = gerar_video(
+            descricao=descricao,
+            camera=camera,
+            proporcao=proporcao,
+            duracao=duracao,
+            nome_arquivo=nome,
+        )
+
+        resultados.append(resultado)
+
+    return resultados
 
 
-def gerar_video(prompt=None, imagem_bytes=None, nome_imagem="imagem.png", duracao=5.0,
-                width=1536, height=1024, descricao=None, camera=None, proporcao=None):
-    # Compatibilidade com as duas chamadas existentes no app.py.
-    texto = prompt if prompt is not None else descricao
-    if not texto:
-        raise ValueError("Descrição do vídeo não informada.")
-    if camera:
-        texto += f"\nCâmera cinematográfica: {camera}."
-    if proporcao:
-        texto += f"\nProporção: {proporcao}."
-    return gerar_video_automatico(texto, imagem_bytes, nome_imagem, duracao, width, height)
+# ============================================================
+# STATUS
+# ============================================================
+
+def status_video() -> dict:
+
+    return {
+        "pasta": str(
+            PASTA_VIDEOS
+        ),
+        "duracao_padrao": DURACAO_PADRAO,
+        "cameras": CAMERAS,
+        "proporcoes": PROPORCOES,
+        "motores": listar_motores(),
+    }
+
+
+# ============================================================
+# MOTOR PLACEHOLDER
+# ============================================================
+
+def motor_nao_configurado(
+    **kwargs,
+):
+
+    raise RuntimeError(
+        "Este motor ainda não foi conectado a uma API real."
+    )
+
+
+# ============================================================
+# TESTE
+# ============================================================
+
+if __name__ == "__main__":
+
+    print(
+        "======================================"
+    )
+
+    print(
+        "Alex IA Ultra - Sistema de Vídeo"
+    )
+
+    print(
+        "======================================"
+    )
+
+    print(
+        status_video()
+    )
+
+    print()
+
+    print(
+        "Nenhum motor de vídeo real foi "
+        "ativado automaticamente."
+    )
