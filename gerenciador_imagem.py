@@ -1,6 +1,7 @@
 # ============================================================
 # 🖼️ ALEX IA ULTRA — GERENCIADOR DE IMAGENS
-# PIXAZO — FLUX 1 SCHNELL
+# PIXAZO + Z IMAGE TURBO
+# FALLBACK AUTOMÁTICO
 # Criado por Geovani
 # ============================================================
 
@@ -20,8 +21,24 @@ PIXAZO_URL = (
     "flux-1-schnell/v1/getData"
 )
 
-MODELO_IMAGEM = "Flux 1 Schnell"
-MOTOR_IMAGEM = "Pixazo / Flux 1 Schnell"
+MODELO_PIXAZO = "Flux 1 Schnell"
+
+MOTOR_PIXAZO = (
+    "Pixazo / Flux 1 Schnell"
+)
+
+
+# ============================================================
+# 🖼️ Z IMAGE TURBO
+# ============================================================
+
+ZIMAGE_SPACE = (
+    "mrfakename/Z-Image-Turbo"
+)
+
+MOTOR_ZIMAGE = (
+    "Z Image Turbo"
+)
 
 
 # ============================================================
@@ -31,14 +48,18 @@ MOTOR_IMAGEM = "Pixazo / Flux 1 Schnell"
 def obter_api_key_pixazo():
 
     try:
+
         chave = st.secrets.get(
             "PIXAZO_API_KEY",
             ""
         )
+
     except Exception:
+
         chave = ""
 
     if not chave:
+
         chave = os.environ.get(
             "PIXAZO_API_KEY",
             ""
@@ -79,9 +100,18 @@ def guardar_ultima_imagem(
     try:
 
         st.session_state.ultima_imagem = imagem
-        st.session_state.ultima_imagem_caminho = caminho
-        st.session_state.ultimo_prompt_imagem = prompt
-        st.session_state.ultimo_motor_imagem = motor
+
+        st.session_state.ultima_imagem_caminho = (
+            caminho
+        )
+
+        st.session_state.ultimo_prompt_imagem = (
+            prompt
+        )
+
+        st.session_state.ultimo_motor_imagem = (
+            motor
+        )
 
         return True
 
@@ -91,7 +121,7 @@ def guardar_ultima_imagem(
 
 
 # ============================================================
-# 🎨 GERAR IMAGEM COM PIXAZO
+# 🎨 PIXAZO
 # ============================================================
 
 def gerar_imagem_pixazo(prompt):
@@ -101,71 +131,66 @@ def gerar_imagem_pixazo(prompt):
     if not api_key:
 
         raise RuntimeError(
-            "PIXAZO_API_KEY não foi encontrada "
-            "nos Secrets do Streamlit."
+            "PIXAZO_API_KEY não encontrada."
         )
 
-    # --------------------------------------------------------
-    # Cabeçalhos
-    # --------------------------------------------------------
-
     headers = {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
-        "Ocp-Apim-Subscription-Key": api_key,
-    }
 
-    # --------------------------------------------------------
-    # Dados da geração
-    # --------------------------------------------------------
+        "Content-Type": "application/json",
+
+        "Cache-Control": "no-cache",
+
+        "Ocp-Apim-Subscription-Key": (
+            api_key
+        ),
+    }
 
     dados = {
+
         "prompt": prompt.strip(),
+
         "num_steps": 4,
+
         "height": 1024,
+
         "width": 1024,
     }
-
-    # --------------------------------------------------------
-    # Enviar para Pixazo
-    # --------------------------------------------------------
 
     try:
 
         resposta = requests.post(
+
             PIXAZO_URL,
+
             headers=headers,
+
             json=dados,
+
             timeout=120,
         )
 
     except Exception as erro:
 
         raise RuntimeError(
-            f"Erro de conexão com a Pixazo: {erro}"
+            f"Erro de conexão com Pixazo: {erro}"
         )
-
-    # --------------------------------------------------------
-    # Verificar resposta HTTP
-    # --------------------------------------------------------
 
     if resposta.status_code != 200:
 
         try:
+
             detalhes = resposta.json()
 
         except Exception:
+
             detalhes = resposta.text
 
         raise RuntimeError(
-            f"Pixazo retornou HTTP "
-            f"{resposta.status_code}:\n\n"
+
+            f"Pixazo HTTP "
+            f"{resposta.status_code}: "
             f"{detalhes}"
         )
-
-    # --------------------------------------------------------
-    # Ler resposta
-    # --------------------------------------------------------
 
     try:
 
@@ -174,21 +199,21 @@ def gerar_imagem_pixazo(prompt):
     except Exception as erro:
 
         raise RuntimeError(
-            f"A Pixazo não retornou JSON válido: {erro}"
+            f"Pixazo não retornou JSON: {erro}"
         )
-
-    # --------------------------------------------------------
-    # Procurar URL da imagem
-    # --------------------------------------------------------
 
     imagem_url = None
 
     if isinstance(resultado, dict):
 
         imagem_url = (
+
             resultado.get("output")
+
             or resultado.get("image")
+
             or resultado.get("image_url")
+
             or resultado.get("url")
         )
 
@@ -198,81 +223,258 @@ def gerar_imagem_pixazo(prompt):
 
             primeiro = resultado[0]
 
-            if isinstance(primeiro, str):
+            if isinstance(
+                primeiro,
+                str
+            ):
 
                 imagem_url = primeiro
 
-            elif isinstance(primeiro, dict):
+            elif isinstance(
+                primeiro,
+                dict
+            ):
 
                 imagem_url = (
+
                     primeiro.get("output")
+
                     or primeiro.get("image")
-                    or primeiro.get("image_url")
+
+                    or primeiro.get(
+                        "image_url"
+                    )
+
                     or primeiro.get("url")
                 )
-
-    # --------------------------------------------------------
-    # Verificar URL
-    # --------------------------------------------------------
 
     if not imagem_url:
 
         raise RuntimeError(
-            "A Pixazo respondeu, mas não encontramos "
-            "a URL da imagem.\n\n"
-            f"Resposta recebida:\n{resultado}"
+            "Pixazo não retornou a URL "
+            "da imagem."
         )
-
-    # --------------------------------------------------------
-    # Baixar imagem
-    # --------------------------------------------------------
 
     try:
 
         imagem = requests.get(
+
             imagem_url,
+
             timeout=120,
         )
 
     except Exception as erro:
 
         raise RuntimeError(
-            f"Erro ao baixar a imagem: {erro}"
+            f"Erro ao baixar imagem Pixazo: "
+            f"{erro}"
         )
 
     if imagem.status_code != 200:
 
         raise RuntimeError(
-            "Não foi possível baixar a imagem. "
+            "Erro ao baixar imagem Pixazo. "
             f"HTTP {imagem.status_code}"
         )
 
-    # --------------------------------------------------------
-    # Salvar imagem
-    # --------------------------------------------------------
-
     caminho = (
+
         obter_pasta_imagens()
+
         / "ultima_imagem.png"
     )
 
-    try:
-
-        caminho.write_bytes(
-            imagem.content
-        )
-
-    except Exception as erro:
-
-        raise RuntimeError(
-            f"Não foi possível salvar a imagem: {erro}"
-        )
+    caminho.write_bytes(
+        imagem.content
+    )
 
     return str(caminho)
 
 
 # ============================================================
-# 🖼️ GERADOR PRINCIPAL
+# 🤖 Z IMAGE TURBO
+# ============================================================
+
+def gerar_imagem_zimage(prompt):
+
+    try:
+
+        from gradio_client import Client
+
+    except Exception as erro:
+
+        raise RuntimeError(
+            "A biblioteca gradio_client "
+            "não está instalada. "
+            f"Detalhes: {erro}"
+        )
+
+    try:
+
+        cliente = Client(
+            ZIMAGE_SPACE
+        )
+
+        resultado = cliente.predict(
+
+            prompt.strip(),
+
+            1024,
+
+            1024,
+
+            9,
+
+            42,
+
+            True,
+
+            api_name="/generate_image"
+        )
+
+    except Exception as erro:
+
+        raise RuntimeError(
+            f"Erro ao chamar Z Image Turbo: "
+            f"{erro}"
+        )
+
+    # --------------------------------------------------------
+    # Obter caminho retornado
+    # --------------------------------------------------------
+
+    imagem = None
+
+    if isinstance(
+        resultado,
+        tuple
+    ):
+
+        if len(resultado) > 0:
+
+            imagem = resultado[0]
+
+    elif isinstance(
+        resultado,
+        str
+    ):
+
+        imagem = resultado
+
+    elif isinstance(
+        resultado,
+        list
+    ):
+
+        if resultado:
+
+            imagem = resultado[0]
+
+    if not imagem:
+
+        raise RuntimeError(
+            "Z Image Turbo não retornou "
+            "uma imagem."
+        )
+
+    # --------------------------------------------------------
+    # Se for caminho local
+    # --------------------------------------------------------
+
+    caminho_origem = str(
+        imagem
+    )
+
+    pasta = obter_pasta_imagens()
+
+    caminho_final = (
+        pasta / "ultima_imagem.png"
+    )
+
+    # --------------------------------------------------------
+    # Caso seja URL
+    # --------------------------------------------------------
+
+    if caminho_origem.startswith(
+        "http://"
+    ) or caminho_origem.startswith(
+        "https://"
+    ):
+
+        try:
+
+            resposta = requests.get(
+
+                caminho_origem,
+
+                timeout=120,
+            )
+
+        except Exception as erro:
+
+            raise RuntimeError(
+                f"Erro ao baixar imagem "
+                f"Z Image Turbo: {erro}"
+            )
+
+        if resposta.status_code != 200:
+
+            raise RuntimeError(
+                "Erro ao baixar imagem "
+                "Z Image Turbo. "
+                f"HTTP {resposta.status_code}"
+            )
+
+        caminho_final.write_bytes(
+            resposta.content
+        )
+
+        return str(
+            caminho_final
+        )
+
+    # --------------------------------------------------------
+    # Caso seja arquivo local
+    # --------------------------------------------------------
+
+    origem = Path(
+        caminho_origem
+    )
+
+    if origem.exists():
+
+        try:
+
+            caminho_final.write_bytes(
+                origem.read_bytes()
+            )
+
+        except Exception as erro:
+
+            raise RuntimeError(
+                f"Erro ao copiar imagem "
+                f"Z Image Turbo: {erro}"
+            )
+
+        return str(
+            caminho_final
+        )
+
+    # --------------------------------------------------------
+    # Última tentativa: resultado pode
+    # possuir objeto diferente
+    # --------------------------------------------------------
+
+    raise RuntimeError(
+        "Z Image Turbo retornou um resultado "
+        "que não conseguimos identificar:\n\n"
+        f"{resultado}"
+    )
+
+
+# ============================================================
+# 🧠 GERADOR PRINCIPAL
 # ============================================================
 
 def gerar_imagem(prompt):
@@ -284,6 +486,10 @@ def gerar_imagem(prompt):
             "❌ O prompt da imagem está vazio."
         )
 
+    # ========================================================
+    # 🥇 MOTOR 1 — PIXAZO
+    # ========================================================
+
     try:
 
         caminho = gerar_imagem_pixazo(
@@ -291,24 +497,76 @@ def gerar_imagem(prompt):
         )
 
         guardar_ultima_imagem(
+
             imagem=caminho,
+
             prompt=prompt,
+
             caminho=caminho,
-            motor=MOTOR_IMAGEM,
+
+            motor=MOTOR_PIXAZO,
         )
 
         return (
+
             caminho,
+
             "🖼️ Imagem gerada com sucesso."
         )
 
-    except Exception as erro:
+    except Exception:
+
+        # ----------------------------------------------------
+        # IMPORTANTE:
+        # NÃO MOSTRAR O ERRO DO PIXAZO.
+        # VAMOS DIRETO PARA O MOTOR 2.
+        # ----------------------------------------------------
+
+        pass
+
+    # ========================================================
+    # 🥈 MOTOR 2 — Z IMAGE TURBO
+    # ========================================================
+
+    try:
+
+        caminho = gerar_imagem_zimage(
+            prompt
+        )
+
+        guardar_ultima_imagem(
+
+            imagem=caminho,
+
+            prompt=prompt,
+
+            caminho=caminho,
+
+            motor=MOTOR_ZIMAGE,
+        )
 
         return (
-            None,
-            "❌ Erro ao gerar imagem:\n\n"
-            f"{erro}"
+
+            caminho,
+
+            "🖼️ Imagem gerada com sucesso."
         )
+
+    except Exception:
+
+        pass
+
+    # ========================================================
+    # ❌ OS DOIS FALHARAM
+    # ========================================================
+
+    return (
+
+        None,
+
+        "❌ Não foi possível gerar a imagem "
+        "neste momento."
+    )
 
 
 # ============================================================
@@ -318,7 +576,10 @@ def gerar_imagem(prompt):
 def mostrar_imagem(prompt):
 
     with st.spinner(
-        "🎨 Alex IA está criando sua imagem..."
+
+        "🎨 Alex IA está criando "
+        "sua imagem..."
+
     ):
 
         imagem, mensagem = gerar_imagem(
@@ -327,21 +588,28 @@ def mostrar_imagem(prompt):
 
     if imagem is None:
 
-        st.error(mensagem)
+        st.error(
+            mensagem
+        )
 
         return False
 
     st.image(
+
         imagem,
+
         caption=(
             "🖼️ Imagem gerada pela "
             "Alex IA Ultra"
         ),
+
         use_container_width=True,
     )
 
     motor = st.session_state.get(
+
         "ultimo_motor_imagem",
+
         "",
     )
 
@@ -395,15 +663,20 @@ def obter_motor_ultima_imagem():
 def limpar_ultima_imagem():
 
     for chave in [
+
         "ultima_imagem",
+
         "ultima_imagem_caminho",
+
         "ultimo_prompt_imagem",
+
         "ultimo_motor_imagem",
+
     ]:
 
         st.session_state.pop(
             chave,
-            None,
+            None
         )
 
 
@@ -418,17 +691,21 @@ def executar_teste():
     )
 
     st.write(
-        "Teste da geração de imagens "
-        "usando Pixazo / Flux 1 Schnell."
+        "Alex IA Ultra utiliza dois "
+        "motores com fallback automático."
     )
 
     st.info(
-        f"Motor: {MOTOR_IMAGEM}"
+        "🥇 Pixazo → "
+        "🥈 Z Image Turbo"
     )
 
     prompt = st.text_input(
+
         "Digite o que deseja gerar:",
+
         value=(
+
             "Um robô futurista caminhando "
             "em uma cidade cyberpunk à noite, "
             "imagem cinematográfica, "
@@ -437,23 +714,29 @@ def executar_teste():
     )
 
     if st.button(
+
         "🎨 Gerar imagem",
+
         use_container_width=True,
+
     ):
 
         if not prompt.strip():
 
             st.warning(
-                "Digite um prompt para gerar a imagem."
+                "Digite um prompt para "
+                "gerar a imagem."
             )
 
             return
 
-        mostrar_imagem(prompt)
+        mostrar_imagem(
+            prompt
+        )
 
 
 # ============================================================
-# 🚀 EXECUÇÃO DO TESTE
+# 🚀 EXECUÇÃO
 # ============================================================
 
 if __name__ == "__main__":
