@@ -1204,16 +1204,16 @@ def gerar_video_automatico(
     # 🥈 SEGUNDO MOTOR — LTX-2.3 HUGGING FACE
     # ====# ============================================================
 
-    try:
+        try:
 
-    resultado = gerar_ltx_huggingface(
-        prompt=prompt,
-        duration=duracao,
-        height=height,
-        width=width,
-        imagem_bytes=imagem_bytes,
-        nome_imagem=nome_imagem,
-    )
+        resultado = gerar_ltx_huggingface(
+            prompt=prompt,
+            duration=duracao,
+            height=height,
+            width=width,
+            imagem_bytes=imagem_bytes,
+            nome_imagem=nome_imagem,
+        )
 
         resultado["fallback"] = bool(erros)
 
