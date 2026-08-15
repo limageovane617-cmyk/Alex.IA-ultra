@@ -13,3 +13,4 @@ markdown>=3.7
 huggingface_hub
 gradio_client
 google-genai
+openai>=1.0.0
