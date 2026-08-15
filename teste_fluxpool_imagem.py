@@ -1,9 +1,8 @@
 # ============================================================
 # 🧪 TESTE DE IMAGEM — FLUXPOOL
 # ============================================================
-# Aplicativo isolado para testar a Fluxpool.
-# Não altera o app.py nem o gerenciador_imagem.py
-# da Alex IA Ultra.
+# Teste isolado.
+# NÃO altera a Alex IA Ultra principal.
 # ============================================================
 
 import os
@@ -14,16 +13,16 @@ import streamlit as st
 
 
 # ============================================================
-# ⚙️ CONFIGURAÇÃO
+# CONFIGURAÇÃO
 # ============================================================
 
-BASE_URL = "https://api.fluxpool.ai/v1"
+API_URL = "https://api.fluxpool.ai/v1/images/generations"
 
 MODELO = "flux-1.1-pro"
 
 
 # ============================================================
-# 🔐 API KEY
+# OBTER API KEY
 # ============================================================
 
 def obter_api_key():
@@ -46,7 +45,7 @@ def obter_api_key():
 
 
 # ============================================================
-# 📁 PASTA DAS IMAGENS
+# PASTA
 # ============================================================
 
 def obter_pasta():
@@ -64,12 +63,16 @@ def obter_pasta():
 
 
 # ============================================================
-# 🎨 GERAR IMAGEM
+# GERAR IMAGEM
 # ============================================================
 
 def gerar_imagem(prompt):
 
     api_key = obter_api_key()
+
+    # --------------------------------------------------------
+    # VERIFICAR CHAVE
+    # --------------------------------------------------------
 
     if not api_key:
 
@@ -79,93 +82,93 @@ def gerar_imagem(prompt):
         )
 
     # --------------------------------------------------------
-    # IMPORTAR OPENAI
+    # PREPARAR REQUISIÇÃO
+    # --------------------------------------------------------
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    dados = {
+        "model": MODELO,
+        "prompt": prompt.strip(),
+        "size": "1024x1024",
+    }
+
+    # --------------------------------------------------------
+    # ENVIAR
     # --------------------------------------------------------
 
     try:
 
-        from openai import OpenAI
-
-    except Exception as erro:
-
-        raise RuntimeError(
-            "A biblioteca openai não está instalada.\n\n"
-            f"Detalhes: {erro}"
-        )
-
-    # --------------------------------------------------------
-    # CRIAR CLIENTE
-    # --------------------------------------------------------
-
-    try:
-
-        cliente = OpenAI(
-            base_url=BASE_URL,
-            api_key=api_key,
-            default_headers={
-                "Authorization": (
-                    f"Bearer {api_key}"
-                )
-            },
-        )
-
-    except Exception as erro:
-
-        raise RuntimeError(
-            "Não foi possível iniciar "
-            f"a conexão com a Fluxpool: {erro}"
-        )
-
-    # --------------------------------------------------------
-    # GERAR IMAGEM
-    # --------------------------------------------------------
-
-    try:
-
-        resposta = cliente.images.generate(
-            model=MODELO,
-            prompt=prompt.strip(),
-            size="1024x1024",
-            n=1,
+        resposta = requests.post(
+            API_URL,
+            headers=headers,
+            json=dados,
+            timeout=180,
         )
 
     except Exception as erro:
 
         raise RuntimeError(
-            "Erro na geração pela Fluxpool: "
-            f"{erro}"
+            f"Erro de conexão com a Fluxpool: {erro}"
         )
 
     # --------------------------------------------------------
-    # VERIFICAR RESPOSTA
+    # VERIFICAR HTTP
     # --------------------------------------------------------
 
-    if resposta is None:
+    if resposta.status_code != 200:
+
+        try:
+            detalhes = resposta.json()
+        except Exception:
+            detalhes = resposta.text
 
         raise RuntimeError(
-            "A Fluxpool não retornou uma resposta."
+            f"Fluxpool retornou HTTP "
+            f"{resposta.status_code}:\n\n"
+            f"{detalhes}"
         )
 
-    if not getattr(
-        resposta,
-        "data",
-        None
-    ):
+    # --------------------------------------------------------
+    # LER JSON
+    # --------------------------------------------------------
+
+    try:
+
+        resultado = resposta.json()
+
+    except Exception as erro:
 
         raise RuntimeError(
-            "A Fluxpool não retornou nenhuma imagem."
+            "A Fluxpool retornou uma resposta "
+            f"que não é JSON: {erro}"
         )
 
     # --------------------------------------------------------
-    # PEGAR URL
+    # VERIFICAR DATA
     # --------------------------------------------------------
 
-    primeiro_resultado = resposta.data[0]
+    dados_imagem = resultado.get(
+        "data"
+    )
 
-    imagem_url = getattr(
-        primeiro_resultado,
-        "url",
-        None
+    if not dados_imagem:
+
+        raise RuntimeError(
+            "A Fluxpool não retornou dados "
+            "da imagem.\n\n"
+            f"Resposta:\n{resultado}"
+        )
+
+    # --------------------------------------------------------
+    # URL
+    # --------------------------------------------------------
+
+    imagem_url = dados_imagem[0].get(
+        "url"
     )
 
     if not imagem_url:
@@ -183,7 +186,7 @@ def gerar_imagem(prompt):
 
         imagem = requests.get(
             imagem_url,
-            timeout=120,
+            timeout=180,
         )
 
     except Exception as erro:
@@ -195,12 +198,12 @@ def gerar_imagem(prompt):
     if imagem.status_code != 200:
 
         raise RuntimeError(
-            "Não foi possível baixar a imagem.\n"
+            "Erro ao baixar a imagem.\n"
             f"HTTP: {imagem.status_code}"
         )
 
     # --------------------------------------------------------
-    # SALVAR IMAGEM
+    # SALVAR
     # --------------------------------------------------------
 
     caminho = (
@@ -224,7 +227,7 @@ def gerar_imagem(prompt):
 
 
 # ============================================================
-# 🧪 INTERFACE DO TESTE
+# INTERFACE
 # ============================================================
 
 def mostrar_teste():
@@ -252,10 +255,6 @@ def mostrar_teste():
         height=150,
     )
 
-    # --------------------------------------------------------
-    # BOTÃO
-    # --------------------------------------------------------
-
     if st.button(
         "🎨 GERAR IMAGEM",
         use_container_width=True,
@@ -270,10 +269,6 @@ def mostrar_teste():
 
             return
 
-        # ----------------------------------------------------
-        # GERAR
-        # ----------------------------------------------------
-
         with st.spinner(
             "🎨 Fluxpool está gerando..."
         ):
@@ -283,10 +278,6 @@ def mostrar_teste():
                 caminho = gerar_imagem(
                     prompt
                 )
-
-                # --------------------------------------------
-                # MOSTRAR
-                # --------------------------------------------
 
                 st.image(
                     caminho,
@@ -313,7 +304,7 @@ def mostrar_teste():
 
 
 # ============================================================
-# 🚀 EXECUÇÃO
+# EXECUÇÃO
 # ============================================================
 
 if __name__ == "__main__":
