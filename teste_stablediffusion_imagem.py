@@ -1,8 +1,9 @@
 # ============================================================
-# 🧪 TESTE DE IMAGEM — STABLE DIFFUSION API
+# 🧪 TESTE DE IMAGEM — MODELSLAB / STABLE DIFFUSION
 # ============================================================
 
 import os
+import time
 from pathlib import Path
 
 import requests
@@ -13,11 +14,9 @@ import streamlit as st
 # ⚙️ CONFIGURAÇÃO
 # ============================================================
 
-API_URL = (
-    "https://stablediffusionapi.com/api/v3/text2img"
-)
+API_URL = "https://modelslab.com/api/v6/images/text2img"
 
-MODELO = "Stable Diffusion"
+MODELO = "flux"
 
 
 # ============================================================
@@ -70,19 +69,20 @@ def gerar_imagem(prompt):
     api_key = obter_api_key()
 
     if not api_key:
-
         raise RuntimeError(
             "STABLE_DIFFUSION_API_KEY "
-            "não foi encontrada nos "
-            "Secrets do Streamlit."
+            "não foi encontrada nos Secrets "
+            "do Streamlit."
         )
 
     dados = {
         "key": api_key,
+        "model_id": MODELO,
         "prompt": prompt.strip(),
         "negative_prompt": (
             "blurry, low quality, distorted, "
-            "bad anatomy, extra limbs"
+            "bad anatomy, extra limbs, "
+            "deformed, watermark"
         ),
         "width": "512",
         "height": "512",
@@ -91,9 +91,6 @@ def gerar_imagem(prompt):
         "guidance_scale": 7.5,
         "enhance_prompt": "yes",
         "safety_checker": "yes",
-        "seed": None,
-        "webhook": None,
-        "track_id": None,
     }
 
     try:
@@ -110,12 +107,8 @@ def gerar_imagem(prompt):
     except Exception as erro:
 
         raise RuntimeError(
-            f"Erro de conexão com a API: {erro}"
+            f"Erro de conexão com a ModelsLab: {erro}"
         )
-
-    # --------------------------------------------------------
-    # VERIFICAR HTTP
-    # --------------------------------------------------------
 
     if resposta.status_code != 200:
 
@@ -125,14 +118,10 @@ def gerar_imagem(prompt):
             detalhes = resposta.text
 
         raise RuntimeError(
-            f"API retornou HTTP "
+            f"ModelsLab retornou HTTP "
             f"{resposta.status_code}:\n\n"
             f"{detalhes}"
         )
-
-    # --------------------------------------------------------
-    # LER JSON
-    # --------------------------------------------------------
 
     try:
 
@@ -141,60 +130,143 @@ def gerar_imagem(prompt):
     except Exception as erro:
 
         raise RuntimeError(
-            f"Resposta inválida da API: {erro}"
+            f"Resposta inválida da ModelsLab: {erro}"
         )
 
-    # --------------------------------------------------------
-    # VERIFICAR STATUS
-    # --------------------------------------------------------
+    # ========================================================
+    # VERIFICAR ERRO DA API
+    # ========================================================
 
-    if resultado.get("status") != "success":
+    if resultado.get("status") == "error":
+
+        mensagem = (
+            resultado.get("message")
+            or resultado.get("error")
+            or resultado
+        )
 
         raise RuntimeError(
-            "A API não informou sucesso.\n\n"
-            f"Resposta:\n{resultado}"
+            f"ModelsLab informou um erro:\n{mensagem}"
         )
 
-    # --------------------------------------------------------
-    # PEGAR URL DA IMAGEM
-    # --------------------------------------------------------
+    # ========================================================
+    # PEGAR IMAGEM DIRETA
+    # ========================================================
 
-    imagens = resultado.get(
-        "output",
-        []
+    output = resultado.get("output")
+
+    if output:
+
+        if isinstance(output, list):
+            imagem_url = output[0]
+        else:
+            imagem_url = output
+
+        return baixar_imagem(imagem_url)
+
+    # ========================================================
+    # PROCESSAMENTO ASSÍNCRONO
+    # ========================================================
+
+    fetch_url = resultado.get("fetch_result")
+
+    if fetch_url:
+
+        return aguardar_resultado(
+            fetch_url
+        )
+
+    # ========================================================
+    # RESULTADO DESCONHECIDO
+    # ========================================================
+
+    raise RuntimeError(
+        "A ModelsLab respondeu, mas não "
+        "encontramos a imagem.\n\n"
+        f"Resposta:\n{resultado}"
     )
 
-    if not imagens:
 
-        # Algumas gerações podem entrar
-        # em fila de processamento.
-        fetch_result = resultado.get(
-            "fetch_result"
-        )
+# ============================================================
+# ⏳ AGUARDAR RESULTADO
+# ============================================================
 
-        if fetch_result:
+def aguardar_resultado(fetch_url):
 
-            raise RuntimeError(
-                "A imagem entrou em processamento "
-                "assíncrono.\n\n"
-                f"fetch_result:\n{fetch_result}"
+    ultima_resposta = None
+
+    for _ in range(30):
+
+        try:
+
+            resposta = requests.get(
+                fetch_url,
+                timeout=60,
             )
 
+            ultima_resposta = resposta
+
+        except Exception:
+            time.sleep(2)
+            continue
+
+        if resposta.status_code != 200:
+
+            time.sleep(2)
+            continue
+
+        try:
+
+            resultado = resposta.json()
+
+        except Exception:
+
+            time.sleep(2)
+            continue
+
+        if resultado.get("status") == "error":
+
+            raise RuntimeError(
+                f"ModelsLab informou um erro:\n"
+                f"{resultado}"
+            )
+
+        output = resultado.get("output")
+
+        if output:
+
+            if isinstance(output, list):
+                imagem_url = output[0]
+            else:
+                imagem_url = output
+
+            return baixar_imagem(
+                imagem_url
+            )
+
+        time.sleep(2)
+
+    raise RuntimeError(
+        "A geração demorou mais que o esperado "
+        "e não retornou uma imagem.\n\n"
+        f"Última resposta: {ultima_resposta}"
+    )
+
+
+# ============================================================
+# ⬇️ BAIXAR IMAGEM
+# ============================================================
+
+def baixar_imagem(imagem_url):
+
+    if not imagem_url:
         raise RuntimeError(
-            "A API respondeu com sucesso, "
-            "mas não retornou nenhuma imagem.\n\n"
-            f"Resposta:\n{resultado}"
+            "A API não retornou uma URL de imagem."
         )
-
-    imagem_url = imagens[0]
-
-    # --------------------------------------------------------
-    # BAIXAR IMAGEM
-    # --------------------------------------------------------
 
     try:
 
-        imagem = requests.get(
+        resposta = requests.get(
             imagem_url,
             timeout=120,
         )
@@ -205,26 +277,22 @@ def gerar_imagem(prompt):
             f"Erro ao baixar a imagem: {erro}"
         )
 
-    if imagem.status_code != 200:
+    if resposta.status_code != 200:
 
         raise RuntimeError(
-            "Não foi possível baixar "
-            f"a imagem. HTTP {imagem.status_code}"
+            "Não foi possível baixar a imagem. "
+            f"HTTP {resposta.status_code}"
         )
-
-    # --------------------------------------------------------
-    # SALVAR
-    # --------------------------------------------------------
 
     caminho = (
         obter_pasta()
-        / "teste_stable_diffusion.png"
+        / "teste_modelslab.png"
     )
 
     try:
 
         caminho.write_bytes(
-            imagem.content
+            resposta.content
         )
 
     except Exception as erro:
@@ -243,8 +311,7 @@ def gerar_imagem(prompt):
 def mostrar_teste():
 
     st.title(
-        "🧪 TESTE DE IMAGEM — "
-        "STABLE DIFFUSION"
+        "🧪 TESTE DE IMAGEM — MODELSLAB"
     )
 
     st.write(
@@ -252,7 +319,7 @@ def mostrar_teste():
     )
 
     st.info(
-        "Motor: Stable Diffusion API"
+        "Motor: ModelsLab / Stable Diffusion"
     )
 
     prompt = st.text_area(
@@ -293,7 +360,8 @@ def mostrar_teste():
                 st.image(
                     caminho,
                     caption=(
-                        "🖼️ Stable Diffusion"
+                        "🖼️ ModelsLab / "
+                        "Stable Diffusion"
                     ),
                     use_container_width=True,
                 )
@@ -318,5 +386,4 @@ def mostrar_teste():
 # ============================================================
 
 if __name__ == "__main__":
-
     mostrar_teste()
