@@ -1,67 +1,3 @@
-# ============================================================
-# 🧪 TESTE DE IMAGEM — FLUXPOOL
-# ============================================================
-
-import os
-from pathlib import Path
-
-import streamlit as st
-
-
-# ============================================================
-# ⚙️ CONFIGURAÇÃO
-# ============================================================
-
-BASE_URL = "https://api.fluxpool.ai/v1"
-
-MODELO = "flux-1.1-pro"
-
-
-# ============================================================
-# 🔐 API KEY
-# ============================================================
-
-def obter_api_key():
-
-    try:
-        chave = st.secrets.get(
-            "FLUXPOOL_API_KEY",
-            ""
-        )
-    except Exception:
-        chave = ""
-
-    if not chave:
-        chave = os.environ.get(
-            "FLUXPOOL_API_KEY",
-            ""
-        )
-
-    return str(chave).strip()
-
-
-# ============================================================
-# 📁 PASTA
-# ============================================================
-
-def obter_pasta():
-
-    pasta = Path(
-        "/tmp/alex_ia_ultra_fluxpool"
-    )
-
-    pasta.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    return pasta
-
-
-# ============================================================
-# 🎨 GERAR IMAGEM
-# ============================================================
-
 def gerar_imagem(prompt):
 
     api_key = obter_api_key()
@@ -85,6 +21,9 @@ def gerar_imagem(prompt):
         cliente = OpenAI(
             base_url=BASE_URL,
             api_key=api_key,
+            default_headers={
+                "Authorization": f"Bearer {api_key}"
+            },
         )
 
         resposta = cliente.images.generate(
@@ -99,10 +38,6 @@ def gerar_imagem(prompt):
         raise RuntimeError(
             f"Erro na geração pela Fluxpool: {erro}"
         )
-
-    # --------------------------------------------------------
-    # Verificar resposta
-    # --------------------------------------------------------
 
     if not resposta:
         raise RuntimeError(
@@ -121,11 +56,8 @@ def gerar_imagem(prompt):
             "A Fluxpool não retornou a URL da imagem."
         )
 
-    # --------------------------------------------------------
-    # Baixar imagem
-    # --------------------------------------------------------
-
     try:
+
         import requests
 
         imagem = requests.get(
@@ -145,10 +77,6 @@ def gerar_imagem(prompt):
             f"HTTP {imagem.status_code}"
         )
 
-    # --------------------------------------------------------
-    # Salvar
-    # --------------------------------------------------------
-
     caminho = (
         obter_pasta()
         / "teste_fluxpool.png"
@@ -167,88 +95,3 @@ def gerar_imagem(prompt):
         )
 
     return str(caminho)
-
-
-# ============================================================
-# 🧪 INTERFACE
-# ============================================================
-
-def mostrar_teste():
-
-    st.title(
-        "🧪 TESTE DE IMAGEM — FLUXPOOL"
-    )
-
-    st.write(
-        "Teste isolado de geração de imagens."
-    )
-
-    st.info(
-        f"Modelo: {MODELO}"
-    )
-
-    prompt = st.text_area(
-        "Digite o que você quer criar:",
-        value=(
-            "Um robô futurista caminhando "
-            "em uma cidade cyberpunk à noite, "
-            "cinematográfico, extremamente "
-            "detalhado, iluminação profissional."
-        ),
-        height=140,
-    )
-
-    if st.button(
-        "🎨 GERAR IMAGEM",
-        use_container_width=True,
-    ):
-
-        if not prompt.strip():
-
-            st.warning(
-                "Digite uma descrição "
-                "para a imagem."
-            )
-
-            return
-
-        with st.spinner(
-            "🎨 Fluxpool está gerando..."
-        ):
-
-            try:
-
-                caminho = gerar_imagem(
-                    prompt
-                )
-
-                st.image(
-                    caminho,
-                    caption=(
-                        "🖼️ Fluxpool / "
-                        "Flux 1.1 Pro"
-                    ),
-                    use_container_width=True,
-                )
-
-                st.success(
-                    "✅ Imagem gerada com sucesso!"
-                )
-
-            except Exception as erro:
-
-                st.error(
-                    "❌ Erro ao gerar imagem:"
-                )
-
-                st.code(
-                    str(erro)
-                )
-
-
-# ============================================================
-# 🚀 EXECUTAR
-# ============================================================
-
-if __name__ == "__main__":
-    mostrar_teste()
