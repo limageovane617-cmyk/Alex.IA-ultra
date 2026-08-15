@@ -1,8 +1,10 @@
 # ============================================================
-# 🎬 TESTE DE VÍDEO — FAL.AI + VIDU
+# 🎬 TESTE DE VÍDEO — FAL.AI + VIDU Q3
+# Criado por Geovani
 # ============================================================
 
 import os
+import base64
 from pathlib import Path
 
 import requests
@@ -10,17 +12,17 @@ import streamlit as st
 
 
 # ============================================================
-# CONFIGURAÇÃO
+# ⚙️ CONFIGURAÇÃO
 # ============================================================
 
-MODELO = "fal-ai/vidu/image-to-video"
+MODELO = "fal-ai/vidu/q3/image-to-video"
 
 PASTA = Path("/tmp/alex_ia_ultra_videos")
 PASTA.mkdir(parents=True, exist_ok=True)
 
 
 # ============================================================
-# API KEY
+# 🔐 API KEY
 # ============================================================
 
 def obter_api_key():
@@ -37,7 +39,52 @@ def obter_api_key():
 
 
 # ============================================================
-# GERAR VÍDEO
+# 🖼️ CONVERTER IMAGEM PARA BASE64
+# ============================================================
+
+def imagem_para_data_uri(arquivo):
+
+    try:
+
+        dados = arquivo.getvalue()
+
+        if not dados:
+            raise RuntimeError(
+                "O arquivo de imagem está vazio."
+            )
+
+        nome = arquivo.name.lower()
+
+        if nome.endswith(".png"):
+            mime = "image/png"
+
+        elif nome.endswith(".webp"):
+            mime = "image/webp"
+
+        elif nome.endswith(".jpg") or nome.endswith(".jpeg"):
+            mime = "image/jpeg"
+
+        else:
+            mime = arquivo.type or "image/jpeg"
+
+        encoded = base64.b64encode(
+            dados
+        ).decode("utf-8")
+
+        return (
+            f"data:{mime};base64,{encoded}"
+        )
+
+    except Exception as erro:
+
+        raise RuntimeError(
+            "Não foi possível preparar "
+            f"a imagem: {erro}"
+        )
+
+
+# ============================================================
+# 🎬 GERAR VÍDEO
 # ============================================================
 
 def gerar_video(
@@ -48,104 +95,37 @@ def gerar_video(
     movimento
 ):
 
-    chave = obter_api_key()
+    api_key = obter_api_key()
 
-    if not chave:
-        raise RuntimeError(
-            "FAL_KEY não foi encontrada nos Secrets."
-        )
-
-    os.environ["FAL_KEY"] = chave
-
-    # --------------------------------------------------------
-    # Importar fal-client
-    # --------------------------------------------------------
-
-    try:
-
-        import fal_client
-
-    except Exception as erro:
+    if not api_key:
 
         raise RuntimeError(
-            "A biblioteca fal-client não está instalada.\n\n"
-            "Adicione ao requirements.txt:\n"
-            "fal-client\n\n"
-            f"Detalhes: {erro}"
+            "FAL_KEY não foi encontrada "
+            "nos Secrets do Streamlit."
         )
 
     # --------------------------------------------------------
-    # SALVAR UPLOADED FILE
+    # Converter imagem diretamente para Base64
     # --------------------------------------------------------
 
-    try:
-
-        extensao = Path(
-            arquivo.name
-        ).suffix.lower()
-
-        if extensao not in [
-            ".png",
-            ".jpg",
-            ".jpeg",
-            ".webp"
-        ]:
-
-            extensao = ".png"
-
-        caminho_imagem = (
-            PASTA / f"imagem_entrada{extensao}"
-        )
-
-        with open(
-            caminho_imagem,
-            "wb"
-        ) as f:
-
-            f.write(
-                arquivo.getbuffer()
-            )
-
-    except Exception as erro:
-
-        raise RuntimeError(
-            "Não foi possível salvar a imagem "
-            "temporariamente:\n\n"
-            f"{erro}"
-        )
+    imagem_data_uri = imagem_para_data_uri(
+        arquivo
+    )
 
     # --------------------------------------------------------
-    # UPLOAD PARA FAL.AI
-    # --------------------------------------------------------
-
-    try:
-
-        imagem_url = fal_client.upload_file(
-            str(caminho_imagem)
-        )
-
-    except Exception as erro:
-
-        raise RuntimeError(
-            "Não foi possível enviar a imagem "
-            "para o fal.ai:\n\n"
-            f"{erro}"
-        )
-
-    # --------------------------------------------------------
-    # PROMPT
+    # Prompt cinematográfico
     # --------------------------------------------------------
 
     prompt_final = f"""
 {prompt}
 
-Movimento da câmera:
+Movimento de câmera:
 {movimento}
 
 CONTINUIDADE DO PERSONAGEM:
 
 Manter o personagem principal consistente
-durante todo o vídeo.
+durante toda a cena.
 
 Preservar:
 - rosto
@@ -153,65 +133,250 @@ Preservar:
 - roupa
 - acessórios
 - aparência
-- proporções
+- proporções corporais
 - identidade visual
 
 Se a câmera sair do personagem e depois
-voltar para ele, ele deve continuar sendo
-exatamente o mesmo personagem.
+voltar para ele, manter exatamente o mesmo
+personagem.
 
-Evitar:
-- troca de rosto
-- troca de roupa
-- deformações
-- mudanças de identidade
-- alterações bruscas de aparência
+Não trocar o rosto.
+Não trocar a roupa.
+Não alterar cabelo ou aparência.
+Evitar deformações.
+Evitar mudanças de identidade.
 
 Movimentos naturais e cinematográficos.
 """
 
     # --------------------------------------------------------
-    # DADOS
+    # Dados da API
     # --------------------------------------------------------
 
     dados = {
         "prompt": prompt_final.strip(),
-        "image_url": imagem_url,
+
+        "image_url": imagem_data_uri,
+
         "duration": int(duracao),
-        "resolution": resolucao
+
+        "resolution": resolucao,
+
+        "audio": False,
+
+        "movement_amplitude": "auto"
     }
 
     # --------------------------------------------------------
-    # GERAR
+    # Enviar diretamente para fal.ai
     # --------------------------------------------------------
+
+    url = (
+        "https://queue.fal.run/"
+        "fal-ai/vidu/q3/image-to-video"
+    )
+
+    headers = {
+        "Authorization": f"Key {api_key}",
+        "Content-Type": "application/json"
+    }
 
     try:
 
-        resultado = fal_client.subscribe(
-            MODELO,
-            arguments=dados
+        resposta = requests.post(
+            url,
+            headers=headers,
+            json=dados,
+            timeout=180
         )
 
     except Exception as erro:
 
         raise RuntimeError(
-            "Erro na geração pelo fal.ai:\n\n"
+            "Erro de conexão com o fal.ai:\n\n"
             f"{erro}"
         )
 
     # --------------------------------------------------------
-    # RESULTADO
+    # Verificar HTTP
     # --------------------------------------------------------
 
-    if not isinstance(
-        resultado,
-        dict
-    ):
+    if resposta.status_code not in [
+        200,
+        201,
+        202
+    ]:
+
+        try:
+            detalhes = resposta.json()
+
+        except Exception:
+            detalhes = resposta.text
 
         raise RuntimeError(
-            "Resposta inesperada do fal.ai:\n\n"
-            f"{resultado}"
+            f"fal.ai retornou HTTP "
+            f"{resposta.status_code}:\n\n"
+            f"{detalhes}"
         )
+
+    # --------------------------------------------------------
+    # Ler resposta
+    # --------------------------------------------------------
+
+    try:
+
+        resultado = resposta.json()
+
+    except Exception as erro:
+
+        raise RuntimeError(
+            "O fal.ai não retornou JSON válido:\n\n"
+            f"{erro}"
+        )
+
+    # --------------------------------------------------------
+    # Resultado direto
+    # --------------------------------------------------------
+
+    if isinstance(resultado, dict):
+
+        video = resultado.get(
+            "video"
+        )
+
+        if video:
+
+            video_url = video.get(
+                "url"
+            )
+
+            if video_url:
+                return baixar_video(
+                    video_url
+                )
+
+        # ----------------------------------------------------
+        # Caso seja uma tarefa na fila
+        # ----------------------------------------------------
+
+        request_id = (
+            resultado.get("request_id")
+            or resultado.get("requestId")
+        )
+
+        if request_id:
+
+            return acompanhar_fila(
+                request_id,
+                api_key
+            )
+
+    raise RuntimeError(
+        "O fal.ai recebeu a solicitação, "
+        "mas não retornou um vídeo.\n\n"
+        f"Resposta:\n{resultado}"
+    )
+
+
+# ============================================================
+# ⏳ ACOMPANHAR FILA
+# ============================================================
+
+def acompanhar_fila(
+    request_id,
+    api_key
+):
+
+    import time
+
+    status_url = (
+        "https://queue.fal.run/"
+        f"{MODELO}/requests/"
+        f"{request_id}/status"
+    )
+
+    resultado_url = (
+        "https://queue.fal.run/"
+        f"{MODELO}/requests/"
+        f"{request_id}"
+    )
+
+    headers = {
+        "Authorization": f"Key {api_key}"
+    }
+
+    for _ in range(120):
+
+        try:
+
+            resposta = requests.get(
+                status_url,
+                headers=headers,
+                timeout=30
+            )
+
+        except Exception as erro:
+
+            raise RuntimeError(
+                f"Erro verificando a fila:\n{erro}"
+            )
+
+        if resposta.status_code != 200:
+
+            raise RuntimeError(
+                "Erro ao consultar a fila:\n"
+                f"HTTP {resposta.status_code}\n\n"
+                f"{resposta.text}"
+            )
+
+        status = resposta.json()
+
+        estado = status.get(
+            "status",
+            ""
+        )
+
+        if estado == "COMPLETED":
+
+            break
+
+        if estado == "FAILED":
+
+            raise RuntimeError(
+                f"A geração falhou:\n{status}"
+            )
+
+        time.sleep(3)
+
+    else:
+
+        raise RuntimeError(
+            "A geração demorou mais do que "
+            "o esperado."
+        )
+
+    try:
+
+        resposta = requests.get(
+            resultado_url,
+            headers=headers,
+            timeout=60
+        )
+
+    except Exception as erro:
+
+        raise RuntimeError(
+            f"Erro ao buscar resultado:\n{erro}"
+        )
+
+    if resposta.status_code != 200:
+
+        raise RuntimeError(
+            "Não foi possível obter o resultado:\n"
+            f"{resposta.text}"
+        )
+
+    resultado = resposta.json()
 
     video = resultado.get(
         "video"
@@ -220,9 +385,8 @@ Movimentos naturais e cinematográficos.
     if not video:
 
         raise RuntimeError(
-            "O fal.ai terminou a solicitação, "
-            "mas não retornou o vídeo.\n\n"
-            f"Resposta:\n{resultado}"
+            "Resultado recebido sem vídeo:\n\n"
+            f"{resultado}"
         )
 
     video_url = video.get(
@@ -232,12 +396,21 @@ Movimentos naturais e cinematográficos.
     if not video_url:
 
         raise RuntimeError(
-            "A URL do vídeo não foi encontrada."
+            "URL do vídeo não encontrada."
         )
 
-    # --------------------------------------------------------
-    # BAIXAR VÍDEO
-    # --------------------------------------------------------
+    return baixar_video(
+        video_url
+    )
+
+
+# ============================================================
+# 📥 BAIXAR VÍDEO
+# ============================================================
+
+def baixar_video(
+    video_url
+):
 
     try:
 
@@ -249,56 +422,54 @@ Movimentos naturais e cinematográficos.
     except Exception as erro:
 
         raise RuntimeError(
-            f"Erro ao baixar o vídeo:\n{erro}"
+            f"Erro ao baixar vídeo:\n{erro}"
         )
 
     if resposta.status_code != 200:
 
         raise RuntimeError(
-            "Falha ao baixar o vídeo.\n"
+            "Erro ao baixar vídeo:\n"
             f"HTTP {resposta.status_code}"
         )
 
-    # --------------------------------------------------------
-    # SALVAR
-    # --------------------------------------------------------
-
-    caminho_video = (
-        PASTA / "video_vidu.mp4"
+    caminho = (
+        PASTA / "video_vidu_q3.mp4"
     )
 
-    caminho_video.write_bytes(
+    caminho.write_bytes(
         resposta.content
     )
 
-    return str(caminho_video)
+    return str(caminho)
 
 
 # ============================================================
-# INTERFACE
+# 🖥️ INTERFACE
 # ============================================================
 
 st.set_page_config(
-    page_title="Teste Vidu — fal.ai",
+    page_title="Teste Vidu Q3",
     page_icon="🎬"
 )
 
 st.title(
-    "🎬 TESTE DE VÍDEO — FAL.AI"
+    "🎬 TESTE DE VÍDEO — VIDU Q3"
 )
 
 st.write(
-    "Teste isolado do Vidu Image-to-Video."
+    "Teste isolado usando fal.ai."
 )
 
 st.info(
-    "🎥 Motor: Vidu\n"
-    "🏢 Provedor: fal.ai"
+    "🎥 Motor: Vidu Q3\n\n"
+    "🏢 Provedor: fal.ai\n\n"
+    "🖼️ Entrada: imagem + prompt\n\n"
+    "📦 Upload: Base64 direto"
 )
 
 
 # ============================================================
-# IMAGEM
+# 🖼️ IMAGEM
 # ============================================================
 
 arquivo = st.file_uploader(
@@ -321,34 +492,34 @@ if arquivo:
 
 
 # ============================================================
-# PROMPT
+# 📝 PROMPT
 # ============================================================
 
 prompt = st.text_area(
-    "📝 O que deve acontecer no vídeo?",
+    "📝 O que deve acontecer?",
     value=(
-        "Um personagem futurista caminhando "
+        "Um personagem futurista caminha "
         "lentamente por uma cidade cyberpunk "
-        "à noite, com luzes neon refletindo "
-        "no chão molhado. Movimento natural "
-        "e aparência cinematográfica."
+        "durante a noite. As luzes neon "
+        "refletem no chão molhado. "
+        "A cena é cinematográfica e realista."
     ),
     height=160
 )
 
 
 # ============================================================
-# CÂMERA
+# 🎥 CÂMERA
 # ============================================================
 
 movimento = st.selectbox(
     "🎥 Movimento da câmera:",
     [
         "Câmera acompanha o personagem suavemente.",
-        "Travelling para frente.",
+        "Travelling cinematográfico para frente.",
         "Travelling lateral.",
         "Zoom cinematográfico lento.",
-        "Câmera se afasta e depois retorna ao personagem.",
+        "Câmera se afasta e retorna ao personagem.",
         "Movimento circular ao redor do personagem.",
         "Câmera estável."
     ]
@@ -356,17 +527,24 @@ movimento = st.selectbox(
 
 
 # ============================================================
-# DURAÇÃO
+# ⏱️ DURAÇÃO
 # ============================================================
 
 duracao = st.selectbox(
     "⏱️ Duração:",
-    [4, 5, 6, 7, 8]
+    [
+        1,
+        2,
+        3,
+        4,
+        5
+    ],
+    index=3
 )
 
 
 # ============================================================
-# RESOLUÇÃO
+# 📺 RESOLUÇÃO
 # ============================================================
 
 resolucao = st.selectbox(
@@ -379,7 +557,7 @@ resolucao = st.selectbox(
 
 
 # ============================================================
-# GERAR
+# 🎬 BOTÃO
 # ============================================================
 
 if st.button(
@@ -424,15 +602,20 @@ if st.button(
                 caminho
             )
 
+            st.caption(
+                "🎥 Motor confirmado: "
+                "fal.ai / Vidu Q3"
+            )
+
             with open(
                 caminho,
                 "rb"
-            ) as arquivo_video:
+            ) as video:
 
                 st.download_button(
                     "📥 Baixar vídeo",
-                    data=arquivo_video,
-                    file_name="video_vidu.mp4",
+                    data=video,
+                    file_name="video_vidu_q3.mp4",
                     mime="video/mp4",
                     use_container_width=True
                 )
@@ -445,4 +628,4 @@ if st.button(
 
             st.code(
                 str(erro)
-            )
+)
