@@ -1529,4 +1529,4 @@ if pergunta:
             "❌ Erro ao conversar "
             f"com o Gemini: {erro}"
 
-         )
+                )
