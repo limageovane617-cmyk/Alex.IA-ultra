@@ -1,94 +1,43 @@
 # ============================================================
-# 🎬 ALEX IA ULTRA — TESTE DE VÍDEO
-# FAL.AI + VIDU IMAGE-TO-VIDEO
-# Criado por Geovani
+# 🎬 TESTE DE VÍDEO — FAL.AI + VIDU
 # ============================================================
 
 import os
 from pathlib import Path
 
+import requests
 import streamlit as st
 
 
 # ============================================================
-# ⚙️ CONFIGURAÇÃO
+# CONFIGURAÇÃO
 # ============================================================
 
 MODELO = "fal-ai/vidu/image-to-video"
 
-DURACAO_PADRAO = 4
-RESOLUCAO_PADRAO = "720p"
+PASTA = Path("/tmp/alex_ia_ultra_videos")
+PASTA.mkdir(parents=True, exist_ok=True)
 
 
 # ============================================================
-# 🔐 API KEY
+# API KEY
 # ============================================================
 
 def obter_api_key():
 
     try:
-        chave = st.secrets.get(
-            "FAL_KEY",
-            ""
-        )
+        chave = st.secrets.get("FAL_KEY", "")
     except Exception:
         chave = ""
 
     if not chave:
-
-        chave = os.environ.get(
-            "FAL_KEY",
-            ""
-        )
+        chave = os.environ.get("FAL_KEY", "")
 
     return str(chave).strip()
 
 
 # ============================================================
-# 📁 PASTA
-# ============================================================
-
-def obter_pasta():
-
-    pasta = Path(
-        "/tmp/alex_ia_ultra_videos"
-    )
-
-    pasta.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    return pasta
-
-
-# ============================================================
-# 📦 INSTALAR / IMPORTAR FAL
-# ============================================================
-
-def obter_fal():
-
-    try:
-
-        from fal_client import (
-            upload_file,
-            subscribe
-        )
-
-        return upload_file, subscribe
-
-    except Exception as erro:
-
-        raise RuntimeError(
-            "A biblioteca fal-client não está instalada.\n\n"
-            "Adicione ao requirements.txt:\n\n"
-            "fal-client\n\n"
-            f"Detalhes: {erro}"
-        )
-
-
-# ============================================================
-# 🎬 GERAR VÍDEO
+# GERAR VÍDEO
 # ============================================================
 
 def gerar_video(
@@ -99,31 +48,80 @@ def gerar_video(
     movimento
 ):
 
-    api_key = obter_api_key()
+    chave = obter_api_key()
 
-    if not api_key:
-
+    if not chave:
         raise RuntimeError(
-            "FAL_KEY não foi encontrada "
-            "nos Secrets do Streamlit."
+            "FAL_KEY não foi encontrada nos Secrets."
         )
 
-    # --------------------------------------------------------
-    # Configurar variável para o fal-client
-    # --------------------------------------------------------
-
-    os.environ["FAL_KEY"] = api_key
-
-    upload_file, subscribe = obter_fal()
+    os.environ["FAL_KEY"] = chave
 
     # --------------------------------------------------------
-    # Upload automático da imagem
+    # Importar fal-client
     # --------------------------------------------------------
 
     try:
 
-        imagem_url = upload_file(
-            arquivo
+        import fal_client
+
+    except Exception as erro:
+
+        raise RuntimeError(
+            "A biblioteca fal-client não está instalada.\n\n"
+            "Adicione ao requirements.txt:\n"
+            "fal-client\n\n"
+            f"Detalhes: {erro}"
+        )
+
+    # --------------------------------------------------------
+    # SALVAR UPLOADED FILE
+    # --------------------------------------------------------
+
+    try:
+
+        extensao = Path(
+            arquivo.name
+        ).suffix.lower()
+
+        if extensao not in [
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".webp"
+        ]:
+
+            extensao = ".png"
+
+        caminho_imagem = (
+            PASTA / f"imagem_entrada{extensao}"
+        )
+
+        with open(
+            caminho_imagem,
+            "wb"
+        ) as f:
+
+            f.write(
+                arquivo.getbuffer()
+            )
+
+    except Exception as erro:
+
+        raise RuntimeError(
+            "Não foi possível salvar a imagem "
+            "temporariamente:\n\n"
+            f"{erro}"
+        )
+
+    # --------------------------------------------------------
+    # UPLOAD PARA FAL.AI
+    # --------------------------------------------------------
+
+    try:
+
+        imagem_url = fal_client.upload_file(
+            str(caminho_imagem)
         )
 
     except Exception as erro:
@@ -135,64 +133,61 @@ def gerar_video(
         )
 
     # --------------------------------------------------------
-    # Prompt final
+    # PROMPT
     # --------------------------------------------------------
 
     prompt_final = f"""
 {prompt}
 
-MOVIMENTO DE CÂMERA:
+Movimento da câmera:
 {movimento}
 
 CONTINUIDADE DO PERSONAGEM:
-Manter o personagem principal como referência visual
-durante toda a cena.
 
-Manter consistentes:
+Manter o personagem principal consistente
+durante todo o vídeo.
+
+Preservar:
 - rosto
 - cabelo
-- aparência
 - roupa
 - acessórios
-- proporções corporais
+- aparência
+- proporções
 - identidade visual
 
-Se a câmera se afastar do personagem e depois retornar,
-o personagem deve continuar sendo o mesmo personagem,
-sem trocar rosto, roupa, cabelo ou características.
+Se a câmera sair do personagem e depois
+voltar para ele, ele deve continuar sendo
+exatamente o mesmo personagem.
+
+Evitar:
+- troca de rosto
+- troca de roupa
+- deformações
+- mudanças de identidade
+- alterações bruscas de aparência
 
 Movimentos naturais e cinematográficos.
-Evitar deformações.
-Evitar mudanças bruscas de identidade.
 """
 
     # --------------------------------------------------------
-    # Dados
+    # DADOS
     # --------------------------------------------------------
 
     dados = {
         "prompt": prompt_final.strip(),
-
         "image_url": imagem_url,
-
-        "duration": int(
-            duracao
-        ),
-
-        "resolution": resolucao,
-
-        "movement_amplitude": "auto",
-
-        "audio": False,
+        "duration": int(duracao),
+        "resolution": resolucao
     }
 
     # --------------------------------------------------------
-    # Gerar
+    # GERAR
     # --------------------------------------------------------
 
     try:
 
-        resultado = subscribe(
+        resultado = fal_client.subscribe(
             MODELO,
             arguments=dados
         )
@@ -205,7 +200,7 @@ Evitar mudanças bruscas de identidade.
         )
 
     # --------------------------------------------------------
-    # Ler resultado
+    # RESULTADO
     # --------------------------------------------------------
 
     if not isinstance(
@@ -214,8 +209,7 @@ Evitar mudanças bruscas de identidade.
     ):
 
         raise RuntimeError(
-            "O fal.ai retornou uma resposta "
-            "em formato inesperado:\n\n"
+            "Resposta inesperada do fal.ai:\n\n"
             f"{resultado}"
         )
 
@@ -226,7 +220,7 @@ Evitar mudanças bruscas de identidade.
     if not video:
 
         raise RuntimeError(
-            "O fal.ai terminou a geração, "
+            "O fal.ai terminou a solicitação, "
             "mas não retornou o vídeo.\n\n"
             f"Resposta:\n{resultado}"
         )
@@ -238,15 +232,12 @@ Evitar mudanças bruscas de identidade.
     if not video_url:
 
         raise RuntimeError(
-            "A URL do vídeo não foi encontrada.\n\n"
-            f"Resposta:\n{resultado}"
+            "A URL do vídeo não foi encontrada."
         )
 
     # --------------------------------------------------------
-    # Baixar vídeo
+    # BAIXAR VÍDEO
     # --------------------------------------------------------
-
-    import requests
 
     try:
 
@@ -269,71 +260,49 @@ Evitar mudanças bruscas de identidade.
         )
 
     # --------------------------------------------------------
-    # Salvar
+    # SALVAR
     # --------------------------------------------------------
 
-    caminho = (
-        obter_pasta()
-        / "video_fal_vidu.mp4"
+    caminho_video = (
+        PASTA / "video_vidu.mp4"
     )
 
-    try:
+    caminho_video.write_bytes(
+        resposta.content
+    )
 
-        caminho.write_bytes(
-            resposta.content
-        )
-
-    except Exception as erro:
-
-        raise RuntimeError(
-            f"Não foi possível salvar o vídeo:\n{erro}"
-        )
-
-    return str(caminho)
+    return str(caminho_video)
 
 
 # ============================================================
-# 🖥️ INTERFACE
+# INTERFACE
 # ============================================================
 
 st.set_page_config(
     page_title="Teste Vidu — fal.ai",
-    page_icon="🎬",
-    layout="centered"
+    page_icon="🎬"
 )
-
-
-# ============================================================
-# 🎬 CABEÇALHO
-# ============================================================
 
 st.title(
     "🎬 TESTE DE VÍDEO — FAL.AI"
 )
 
 st.write(
-    "Teste isolado de geração de vídeo "
-    "usando Vidu Image-to-Video."
+    "Teste isolado do Vidu Image-to-Video."
 )
 
 st.info(
-    "🎥 Motor: Vidu Image-to-Video\n\n"
-    "🏢 Provedor: fal.ai\n\n"
-    f"⏱️ Duração inicial: {DURACAO_PADRAO} segundos\n\n"
-    f"📺 Resolução: {RESOLUCAO_PADRAO}"
+    "🎥 Motor: Vidu\n"
+    "🏢 Provedor: fal.ai"
 )
 
 
 # ============================================================
-# 🖼️ IMAGEM
+# IMAGEM
 # ============================================================
-
-st.subheader(
-    "🖼️ Imagem inicial"
-)
 
 arquivo = st.file_uploader(
-    "Escolha uma imagem do seu celular:",
+    "🖼️ Escolha uma imagem:",
     type=[
         "png",
         "jpg",
@@ -352,68 +321,52 @@ if arquivo:
 
 
 # ============================================================
-# 📝 PROMPT
+# PROMPT
 # ============================================================
-
-st.subheader(
-    "📝 Descrição da cena"
-)
 
 prompt = st.text_area(
-    "O que deve acontecer?",
+    "📝 O que deve acontecer no vídeo?",
     value=(
-        "Um personagem futurista caminha "
+        "Um personagem futurista caminhando "
         "lentamente por uma cidade cyberpunk "
-        "durante a noite. "
-        "As luzes neon refletem no chão molhado. "
-        "A cena possui aparência cinematográfica "
-        "e realista."
+        "à noite, com luzes neon refletindo "
+        "no chão molhado. Movimento natural "
+        "e aparência cinematográfica."
     ),
-    height=180
+    height=160
 )
 
 
 # ============================================================
-# 🎥 CÂMERA
+# CÂMERA
 # ============================================================
-
-st.subheader(
-    "🎥 Movimento da câmera"
-)
 
 movimento = st.selectbox(
-    "Escolha o movimento:",
+    "🎥 Movimento da câmera:",
     [
         "Câmera acompanha o personagem suavemente.",
-        "Travelling cinematográfico para frente.",
-        "Travelling lateral acompanhando o personagem.",
+        "Travelling para frente.",
+        "Travelling lateral.",
         "Zoom cinematográfico lento.",
-        "Câmera se afasta lentamente e depois retorna ao personagem.",
-        "Movimento circular suave ao redor do personagem.",
-        "Plano cinematográfico estável."
+        "Câmera se afasta e depois retorna ao personagem.",
+        "Movimento circular ao redor do personagem.",
+        "Câmera estável."
     ]
 )
 
 
 # ============================================================
-# ⏱️ DURAÇÃO
+# DURAÇÃO
 # ============================================================
 
 duracao = st.selectbox(
     "⏱️ Duração:",
-    [
-        4,
-        5,
-        6,
-        7,
-        8
-    ],
-    index=0
+    [4, 5, 6, 7, 8]
 )
 
 
 # ============================================================
-# 📺 RESOLUÇÃO
+# RESOLUÇÃO
 # ============================================================
 
 resolucao = st.selectbox(
@@ -421,13 +374,12 @@ resolucao = st.selectbox(
     [
         "720p",
         "1080p"
-    ],
-    index=0
+    ]
 )
 
 
 # ============================================================
-# 🎬 BOTÃO
+# GERAR
 # ============================================================
 
 if st.button(
@@ -445,7 +397,7 @@ if st.button(
     elif not prompt.strip():
 
         st.warning(
-            "⚠️ Digite uma descrição para o vídeo."
+            "⚠️ Digite o que deve acontecer."
         )
 
     else:
@@ -453,15 +405,15 @@ if st.button(
         try:
 
             with st.spinner(
-                "📤 Enviando imagem..."
+                "🎬 Gerando vídeo..."
             ):
 
                 caminho = gerar_video(
-                    arquivo=arquivo,
-                    prompt=prompt,
-                    duracao=duracao,
-                    resolucao=resolucao,
-                    movimento=movimento
+                    arquivo,
+                    prompt,
+                    duracao,
+                    resolucao,
+                    movimento
                 )
 
             st.success(
@@ -472,22 +424,18 @@ if st.button(
                 caminho
             )
 
-            st.caption(
-                "🎥 Motor utilizado: "
-                "fal.ai / Vidu"
-            )
+            with open(
+                caminho,
+                "rb"
+            ) as arquivo_video:
 
-            st.download_button(
-                label="📥 Baixar vídeo",
-                data=Path(
-                    caminho
-                ).read_bytes(),
-                file_name=(
-                    "video_fal_vidu.mp4"
-                ),
-                mime="video/mp4",
-                use_container_width=True
-            )
+                st.download_button(
+                    "📥 Baixar vídeo",
+                    data=arquivo_video,
+                    file_name="video_vidu.mp4",
+                    mime="video/mp4",
+                    use_container_width=True
+                )
 
         except Exception as erro:
 
@@ -497,4 +445,4 @@ if st.button(
 
             st.code(
                 str(erro)
-)
+            )
