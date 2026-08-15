@@ -69,6 +69,7 @@ from voz import mostrar_audio
 from video import (
     gerar_video,
     mostrar_configuracao_video,
+    verificar_magic_hour,
 )
 
 from arquivos import ler_arquivo
