@@ -2002,22 +2002,19 @@ def gerar_video(
 
 
     # ========================================================
-    # TODOS FALHARAM
+    # ❌ TODOS OS MOTORES FALHARAM
     # ========================================================
 
     print("")
-    print(
-        "========================================"
-    )
+    print("========================================")
+    print("❌ NENHUM MOTOR DE VÍDEO CONSEGUIU GERAR")
+    print("========================================")
 
-    print(
-        "❌ NENHUM MOTOR DE VÍDEO CONSEGUIU GERAR"
-    )
+    erro_completo = "\n\n".join(erros)
 
-    print(
-        "========================================"
-    )
-
+    print("")
+    print("🔎 ERROS DOS MOTORES:")
+    print(erro_completo)
 
     return {
 
@@ -2037,9 +2034,10 @@ def gerar_video(
             ),
 
         "erro":
-            "\n".join(
-                erros
-            ),
+            erro_completo,
+
+        "erros_motores":
+            erros,
 
     }
 
