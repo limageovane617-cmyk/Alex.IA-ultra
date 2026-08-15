@@ -1215,43 +1215,30 @@ def gerar_video_automatico(
 
         try:
 
-            resultado = (
-                gerar_magichour(
-
-                    imagem_bytes=
-                        imagem_bytes,
-
-                    nome_arquivo=
-                        nome_imagem,
-
-                    prompt=
-                        prompt
-
-                )
+            resultado = gerar_magichour(
+                imagem_bytes=imagem_bytes,
+                nome_arquivo=nome_imagem,
+                prompt=prompt,
             )
 
-
-            resultado[
-                "fallback"
-            ] = False
-
-
-            resultado[
-                "erros_anteriores"
-            ] = erros
-
+            resultado["fallback"] = False
+            resultado["erros_anteriores"] = erros
 
             return resultado
-
 
         except Exception as erro:
 
             erros.append(
-
                 "Magic Hour: "
-                +
-                str(erro)
+                + str(erro)
+            )
 
+            # Mostra o erro real do Magic Hour
+            # antes de tentar o fallback.
+            raise RuntimeError(
+                "❌ O Magic Hour não conseguiu gerar "
+                "o vídeo a partir da imagem.\n\n"
+                + str(erro)
             )
 
 
