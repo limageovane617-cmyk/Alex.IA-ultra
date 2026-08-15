@@ -6,19 +6,19 @@ import streamlit as st
 
 
 # ============================================================
-# 🖼️ TESTE PIXAZO — FLUX SCHNELL
+# 🖼️ TESTE PIXAZO — FLUX 1 SCHNELL
 # ============================================================
 
 PIXAZO_URL = (
     "https://gateway.pixazo.ai/"
-    "flux-1-schnell/v1/getDataBatch"
+    "flux-1-schnell/v1/getData"
 )
 
 MODELO = "Flux 1 Schnell"
 
 
 # ============================================================
-# 🔐 API KEY
+# 🔐 OBTER API KEY
 # ============================================================
 
 def obter_api_key():
@@ -41,7 +41,7 @@ def obter_api_key():
 
 
 # ============================================================
-# 📁 PASTA
+# 📁 PASTA DAS IMAGENS
 # ============================================================
 
 def obter_pasta():
@@ -73,11 +73,19 @@ def gerar_imagem(prompt):
             "nos Secrets do Streamlit."
         )
 
+    # --------------------------------------------------------
+    # Cabeçalhos da Pixazo
+    # --------------------------------------------------------
+
     headers = {
         "Content-Type": "application/json",
-        "X-Secret-Key": api_key,
         "Cache-Control": "no-cache",
+        "Ocp-Apim-Subscription-Key": api_key,
     }
+
+    # --------------------------------------------------------
+    # Dados da geração
+    # --------------------------------------------------------
 
     dados = {
         "prompt": prompt.strip(),
@@ -85,6 +93,10 @@ def gerar_imagem(prompt):
         "height": 1024,
         "width": 1024,
     }
+
+    # --------------------------------------------------------
+    # Fazer requisição
+    # --------------------------------------------------------
 
     try:
 
@@ -101,10 +113,15 @@ def gerar_imagem(prompt):
             f"Erro de conexão com a Pixazo: {erro}"
         )
 
+    # --------------------------------------------------------
+    # Verificar HTTP
+    # --------------------------------------------------------
+
     if resposta.status_code != 200:
 
         try:
             detalhes = resposta.json()
+
         except Exception:
             detalhes = resposta.text
 
@@ -113,6 +130,10 @@ def gerar_imagem(prompt):
             f"{resposta.status_code}:\n\n"
             f"{detalhes}"
         )
+
+    # --------------------------------------------------------
+    # Ler resposta
+    # --------------------------------------------------------
 
     try:
 
@@ -125,18 +146,61 @@ def gerar_imagem(prompt):
         )
 
     # --------------------------------------------------------
-    # URL da imagem
+    # Mostrar resposta caso não encontremos imagem
     # --------------------------------------------------------
 
-    imagem_url = resultado.get(
-        "output"
-    )
+    if not resultado:
+
+        raise RuntimeError(
+            "A Pixazo retornou uma resposta vazia."
+        )
+
+    # --------------------------------------------------------
+    # Procurar URL da imagem
+    # --------------------------------------------------------
+
+    imagem_url = None
+
+    if isinstance(resultado, dict):
+
+        imagem_url = (
+            resultado.get("output")
+            or resultado.get("image")
+            or resultado.get("image_url")
+            or resultado.get("url")
+        )
+
+    # --------------------------------------------------------
+    # Caso a API retorne uma lista
+    # --------------------------------------------------------
+
+    if isinstance(resultado, list):
+
+        if len(resultado) > 0:
+
+            primeiro = resultado[0]
+
+            if isinstance(primeiro, str):
+                imagem_url = primeiro
+
+            elif isinstance(primeiro, dict):
+
+                imagem_url = (
+                    primeiro.get("output")
+                    or primeiro.get("image")
+                    or primeiro.get("image_url")
+                    or primeiro.get("url")
+                )
+
+    # --------------------------------------------------------
+    # Verificar URL
+    # --------------------------------------------------------
 
     if not imagem_url:
 
         raise RuntimeError(
-            "A Pixazo respondeu, mas não "
-            "encontramos o endereço da imagem.\n\n"
+            "A Pixazo respondeu corretamente, "
+            "mas não encontramos a URL da imagem.\n\n"
             f"Resposta recebida:\n{resultado}"
         )
 
@@ -160,13 +224,13 @@ def gerar_imagem(prompt):
     if imagem.status_code != 200:
 
         raise RuntimeError(
-            "A Pixazo gerou a resposta, "
+            "A Pixazo retornou a URL, "
             "mas não foi possível baixar "
             f"a imagem. HTTP {imagem.status_code}"
         )
 
     # --------------------------------------------------------
-    # Salvar
+    # Salvar imagem
     # --------------------------------------------------------
 
     caminho = (
@@ -190,7 +254,7 @@ def gerar_imagem(prompt):
 
 
 # ============================================================
-# 🧪 INTERFACE
+# 🧪 INTERFACE DO TESTE
 # ============================================================
 
 def mostrar_teste():
