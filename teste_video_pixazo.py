@@ -59,7 +59,7 @@ def obter_api_key():
 
 
 # ============================================================
-# 📁 PASTA DO VÍDEO
+# 📁 PASTA DE VÍDEOS
 # ============================================================
 
 def obter_pasta_videos():
@@ -77,7 +77,7 @@ def obter_pasta_videos():
 
 
 # ============================================================
-# 🎬 ENVIAR GERAÇÃO
+# 🎬 SOLICITAR VÍDEO
 # ============================================================
 
 def solicitar_video(
@@ -88,7 +88,6 @@ def solicitar_video(
     api_key = obter_api_key()
 
     if not api_key:
-
         raise RuntimeError(
             "PIXAZO_API_KEY não foi encontrada "
             "nos Secrets do Streamlit."
@@ -102,7 +101,7 @@ def solicitar_video(
 
     dados = {
         "start_image": imagem_url,
-        "prompt": prompt,
+        "prompt": prompt.strip(),
         "duration": DURACAO,
         "resolution": RESOLUCAO,
         "audio": False,
@@ -127,7 +126,6 @@ def solicitar_video(
 
         try:
             detalhes = resposta.json()
-
         except Exception:
             detalhes = resposta.text
 
@@ -138,9 +136,7 @@ def solicitar_video(
         )
 
     try:
-
         resultado = resposta.json()
-
     except Exception as erro:
 
         raise RuntimeError(
@@ -162,18 +158,12 @@ def solicitar_video(
 
 
 # ============================================================
-# ⏳ CONSULTAR STATUS
+# ⏳ AGUARDAR GERAÇÃO
 # ============================================================
 
 def esperar_video(request_id):
 
     api_key = obter_api_key()
-
-    if not api_key:
-
-        raise RuntimeError(
-            "PIXAZO_API_KEY não foi encontrada."
-        )
 
     headers = {
         "Ocp-Apim-Subscription-Key": api_key,
@@ -209,20 +199,17 @@ def esperar_video(request_id):
 
             try:
                 detalhes = resposta.json()
-
             except Exception:
                 detalhes = resposta.text
 
             raise RuntimeError(
-                f"Erro ao consultar geração "
+                f"Erro ao consultar status "
                 f"HTTP {resposta.status_code}:\n\n"
                 f"{detalhes}"
             )
 
         try:
-
             resultado = resposta.json()
-
         except Exception as erro:
 
             raise RuntimeError(
@@ -256,11 +243,11 @@ def esperar_video(request_id):
                     "mas o campo output não foi encontrado."
                 )
 
-            urls = output.get(
+            media_url = output.get(
                 "media_url"
             )
 
-            if not urls:
+            if not media_url:
 
                 raise RuntimeError(
                     "A geração terminou, "
@@ -268,17 +255,13 @@ def esperar_video(request_id):
                 )
 
             if isinstance(
-                urls,
+                media_url,
                 list
             ):
 
-                video_url = urls[0]
+                return media_url[0]
 
-            else:
-
-                video_url = urls
-
-            return video_url
+            return media_url
 
         # ----------------------------------------------------
         # ERRO
@@ -297,25 +280,6 @@ def esperar_video(request_id):
             raise RuntimeError(
                 f"A Pixazo informou um erro:\n{erro}"
             )
-
-        # ----------------------------------------------------
-        # PROCESSANDO
-        # ----------------------------------------------------
-
-        if status in [
-            "QUEUED",
-            "PROCESSING"
-        ]:
-
-            time.sleep(
-                INTERVALO_STATUS
-            )
-
-            continue
-
-        # ----------------------------------------------------
-        # STATUS DESCONHECIDO
-        # ----------------------------------------------------
 
         time.sleep(
             INTERVALO_STATUS
@@ -353,48 +317,15 @@ def baixar_video(video_url):
         / "video_pixazo.mp4"
     )
 
-    try:
-
-        caminho.write_bytes(
-            resposta.content
-        )
-
-    except Exception as erro:
-
-        raise RuntimeError(
-            f"Não foi possível salvar o vídeo:\n{erro}"
-        )
+    caminho.write_bytes(
+        resposta.content
+    )
 
     return str(caminho)
 
 
 # ============================================================
-# 🎬 GERAR VÍDEO COMPLETO
-# ============================================================
-
-def gerar_video(
-    imagem_url,
-    prompt
-):
-
-    request_id = solicitar_video(
-        imagem_url,
-        prompt
-    )
-
-    video_url = esperar_video(
-        request_id
-    )
-
-    caminho = baixar_video(
-        video_url
-    )
-
-    return caminho
-
-
-# ============================================================
-# 🖥️ INTERFACE
+# 🖥️ CONFIGURAÇÃO DA PÁGINA
 # ============================================================
 
 st.set_page_config(
@@ -405,7 +336,7 @@ st.set_page_config(
 
 
 # ============================================================
-# 🎬 CABEÇALHO
+# 🎬 TÍTULO
 # ============================================================
 
 st.title(
@@ -413,8 +344,8 @@ st.title(
 )
 
 st.write(
-    "Teste isolado de geração de vídeo "
-    "usando Vidu Q3 Turbo."
+    "Teste isolado do Vidu Q3 Turbo "
+    "através da API da Pixazo."
 )
 
 st.info(
@@ -425,20 +356,50 @@ st.info(
 
 
 # ============================================================
-# 🖼️ IMAGEM
+# 🖼️ UPLOAD LOCAL
 # ============================================================
 
 st.subheader(
-    "🖼️ Imagem inicial"
+    "🖼️ Imagem do personagem"
+)
+
+arquivo_imagem = st.file_uploader(
+    "Escolha uma imagem do seu celular:",
+    type=[
+        "png",
+        "jpg",
+        "jpeg",
+        "webp"
+    ]
+)
+
+if arquivo_imagem:
+
+    st.image(
+        arquivo_imagem,
+        caption="Imagem selecionada",
+        use_container_width=True
+    )
+
+
+# ============================================================
+# 🌐 URL PÚBLICA
+# ============================================================
+
+st.subheader(
+    "🌐 URL pública da imagem"
 )
 
 imagem_url = st.text_input(
-    "Cole a URL pública da imagem:",
-    placeholder="https://exemplo.com/personagem.png"
+    "Cole aqui a URL pública:",
+    placeholder="https://site.com/imagem.png"
 )
 
 st.caption(
-    "A imagem precisa estar disponível por uma URL pública."
+    "A Pixazo precisa conseguir acessar a imagem "
+    "pela internet. O upload acima serve para "
+    "você visualizar a imagem, mas o Vidu precisa "
+    "receber uma URL pública."
 )
 
 
@@ -447,28 +408,29 @@ st.caption(
 # ============================================================
 
 st.subheader(
-    "🎥 Movimento"
+    "🎥 Movimento da cena"
 )
 
 prompt = st.text_area(
-    "Descreva o movimento do vídeo:",
+    "Descreva o que deve acontecer:",
     value=(
         "O personagem começa parado e depois "
-        "caminha lentamente em direção à câmera. "
+        "caminha lentamente para frente. "
         "A câmera faz um movimento cinematográfico "
         "suave, mantendo o personagem como referência "
-        "visual principal. O rosto, cabelo, roupa e "
-        "características do personagem permanecem "
-        "consistentes durante toda a cena. "
-        "Iluminação cinematográfica profissional, "
-        "movimento natural e realista."
+        "visual principal. "
+        "Manter exatamente o mesmo rosto, cabelo, "
+        "roupa, aparência e características do personagem "
+        "durante toda a cena. "
+        "Movimentos naturais e realistas, "
+        "iluminação cinematográfica profissional."
     ),
-    height=180
+    height=200
 )
 
 
 # ============================================================
-# 🎥 BOTÃO
+# 🎥 GERAR
 # ============================================================
 
 if st.button(
@@ -480,8 +442,8 @@ if st.button(
     if not imagem_url.strip():
 
         st.warning(
-            "⚠️ Cole primeiro a URL pública "
-            "da imagem inicial."
+            "⚠️ Para este primeiro teste, "
+            "precisamos de uma URL pública da imagem."
         )
 
     elif not prompt.strip():
@@ -495,7 +457,7 @@ if st.button(
         try:
 
             with st.spinner(
-                "🎬 Enviando vídeo para a Pixazo..."
+                "🎬 Enviando pedido para a Pixazo..."
             ):
 
                 request_id = solicitar_video(
@@ -504,16 +466,15 @@ if st.button(
                 )
 
             st.success(
-                "✅ Pedido enviado!"
+                "✅ Pedido enviado para a Pixazo!"
             )
 
             st.caption(
-                f"ID da geração: {request_id}"
+                f"ID: {request_id}"
             )
 
             with st.spinner(
-                "⏳ Gerando vídeo... "
-                "Isso pode levar alguns minutos."
+                "⏳ Gerando vídeo... aguarde."
             ):
 
                 video_url = esperar_video(
@@ -537,13 +498,14 @@ if st.button(
             )
 
             st.caption(
-                "🎥 Motor utilizado: "
-                "Pixazo / Vidu Q3 Turbo"
+                "🎥 Pixazo / Vidu Q3 Turbo"
             )
 
             st.download_button(
-                label="📥 Baixar vídeo",
-                data=Path(caminho).read_bytes(),
+                "📥 Baixar vídeo",
+                data=Path(
+                    caminho
+                ).read_bytes(),
                 file_name="video_pixazo.mp4",
                 mime="video/mp4",
                 use_container_width=True
@@ -557,4 +519,4 @@ if st.button(
 
             st.code(
                 str(erro)
-      )
+)
