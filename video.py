@@ -1,22 +1,42 @@
 # ============================================================
-# 🎬 ALEX IA ULTRA — SISTEMA DE VÍDEO
-# Criada por Geovani
+# 🎬 VIDEO.PY — GERENCIADOR AUTOMÁTICO DE VÍDEO
+# Alex IA Ultra
+#
+# MOTORES:
+# 1. LTX-2.3 — Hugging Face
+# 2. Magic Hour — LTX-2.3
+#
+# COM IMAGEM:
+#     Magic Hour → LTX-2.3 como fallback
+#
+# SEM IMAGEM:
+#     LTX-2.3 — Hugging Face
 # ============================================================
 
 import os
 import time
-import tempfile
 from pathlib import Path
+from typing import Optional, Tuple, Dict, Any
 
+import requests
 import streamlit as st
-from google.genai import types
 
-from servicos import criar_cliente_gemini
+try:
+    from gradio_client import Client
+except ImportError:
+    Client = None
 
 
 # ============================================================
-# 🎥 CONFIGURAÇÕES
+# ⚙️ CONFIGURAÇÃO
 # ============================================================
+
+NOME_MODULO = "Alex IA Ultra — Gerenciador de Vídeo"
+
+MOTORES_VIDEO = [
+    "LTX-2.3 — Hugging Face",
+    "Magic Hour — LTX-2.3",
+]
 
 CAMERAS = [
     "Sony FX5",
@@ -26,685 +46,1187 @@ CAMERAS = [
 ]
 
 PROPORCOES = [
+    "1:1",
     "16:9",
     "9:16",
 ]
 
-DURACAO_VIDEO = 8
-
-MODELO_VEO = "veo-3.1-generate-preview"
-
-EXTENSAO_SEGUNDOS = 7
-
-DURACAO_MAXIMA_VIDEO = 148
+DURACAO_PADRAO = 5
 
 
 # ============================================================
-# 🎬 PROMPT CINEMATOGRÁFICO
+# 🎬 LTX-2.3 — HUGGING FACE
 # ============================================================
 
-def preparar_prompt_video(
-    descricao,
-    camera="ARRI Alexa Mini LF",
-    proporcao="16:9",
-    duracao=8,
-):
-    """
-    Cria o prompt cinematográfico enviado ao Veo.
-    """
-
-    if not descricao or not descricao.strip():
-        return None
-
-    if camera not in CAMERAS:
-        camera = "ARRI Alexa Mini LF"
-
-    if proporcao not in PROPORCOES:
-        proporcao = "16:9"
-
-    duracao = DURACAO_VIDEO
-
-    return f"""
-Crie um vídeo cinematográfico baseado na seguinte descrição:
-
-{descricao.strip()}
-
-DIREÇÃO CINEMATOGRÁFICA
-
-Câmera de referência: {camera}
-Proporção: {proporcao}
-Duração: aproximadamente {duracao} segundos.
-
-Use linguagem visual cinematográfica de alta qualidade.
-
-Utilize iluminação realista, composição profissional,
-profundidade de campo cinematográfica e movimentos de
-câmera naturais e fisicamente plausíveis.
-
-CONTINUIDADE VISUAL — REGRA PRIORITÁRIA
-
-Mantenha consistência visual durante toda a cena.
-
-Preserve:
-
-- identidade dos personagens;
-- rosto;
-- cabelos;
-- olhos;
-- idade aparente;
-- roupas;
-- acessórios;
-- características físicas;
-- objetos importantes;
-- ambiente;
-- iluminação;
-- clima;
-- horário;
-- estilo visual.
-
-Não altere características importantes do personagem
-sem instrução explícita.
-
-Não troque a identidade do personagem.
-
-Não transforme o personagem em outra pessoa.
-
-Não troque roupas ou acessórios sem motivo narrativo explícito.
-
-Evite:
-
-- deformações;
-- duplicações;
-- membros extras;
-- alterações bruscas de aparência;
-- mudanças inexplicáveis de cenário.
-
-FOCO NO PERSONAGEM PRINCIPAL
-
-Quando houver um personagem principal,
-mantenha-o como foco visual da cena.
-
-A câmera pode realizar:
-
-- travelling;
-- pan;
-- tilt;
-- dolly;
-- orbit;
-- aproximação;
-- afastamento;
-- movimentos cinematográficos naturais.
-
-Se o personagem sair temporariamente do enquadramento,
-faça um reenquadramento natural e cinematográfico.
-
-Volte o foco para o personagem.
-
-Preserve sua identidade, rosto, cabelo, roupa e acessórios.
-
-Não substitua o personagem.
-
-MOVIMENTO
-
-Os movimentos devem parecer naturais,
-fisicamente plausíveis e cinematográficos.
-
-Evite movimentos de câmera impossíveis,
-mudanças bruscas de perspectiva e deformações.
-
-ÁUDIO
-
-Quando apropriado, inclua:
-
-- áudio ambiente;
-- efeitos sonoros;
-- sons naturais;
-- diálogos quando solicitados;
-- atmosfera sonora;
-- sons coerentes com o ambiente.
-
-O resultado deve parecer uma sequência cinematográfica
-profissional, coerente, realista e imersiva.
-""".strip()
+LTX_HF_SPACE = (
+    "https://lightricks-ltx-2-3.hf.space"
+)
 
 
 # ============================================================
-# 📁 PASTA DOS VÍDEOS
+# 🎬 MAGIC HOUR
 # ============================================================
 
-def obter_pasta_videos():
-    """
-    Cria uma pasta temporária para os vídeos do Alex IA Ultra.
-    """
+MAGIC_HOUR_BASE_URL = (
+    "https://api.magichour.ai/v1"
+)
 
-    pasta = Path(tempfile.gettempdir()) / "alex_ia_ultra"
+MAGIC_HOUR_MODELO = "ltx-2.3"
 
-    pasta.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+MAGIC_HOUR_RESOLUCAO = "480p"
 
-    return pasta
+MAGIC_HOUR_DURACAO = 5
 
 
 # ============================================================
-# 💾 SALVAR VÍDEO
+# 📁 PASTA TEMPORÁRIA
+# ============================================================
+
+PASTA = Path(
+    "/tmp/alex_ia_ultra_videos"
+)
+
+PASTA.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+
+# ============================================================
+# 🔐 API KEY MAGIC HOUR
+# ============================================================
+
+def obter_api_key_magichour():
+
+    try:
+
+        chave = st.secrets.get(
+            "MAGIC_HOUR_API_KEY",
+            ""
+        )
+
+    except Exception:
+
+        chave = ""
+
+    if not chave:
+
+        chave = os.environ.get(
+            "MAGIC_HOUR_API_KEY",
+            ""
+        )
+
+    return str(chave).strip()
+
+
+# ============================================================
+# 🔐 HEADERS MAGIC HOUR
+# ============================================================
+
+def headers_magichour():
+
+    chave = obter_api_key_magichour()
+
+    if not chave:
+
+        raise RuntimeError(
+            "MAGIC_HOUR_API_KEY não foi encontrada "
+            "nos Secrets do Streamlit."
+        )
+
+    return {
+
+        "Authorization":
+            f"Bearer {chave}",
+
+        "Accept":
+            "application/json",
+
+        "Content-Type":
+            "application/json",
+    }
+
+
+# ============================================================
+# 🧰 SALVAR ARQUIVO
 # ============================================================
 
 def salvar_video(
-    cliente,
-    video,
-    nome,
+    conteudo,
+    nome
 ):
+
+    caminho = (
+        PASTA /
+        nome
+    )
+
+    caminho.write_bytes(
+        conteudo
+    )
+
+    return str(caminho)
+
+
+# ============================================================
+# 🎬 MOTOR 1
+# LTX-2.3 — HUGGING FACE
+# ============================================================
+
+def gerar_ltx_huggingface(
+    prompt,
+    duration=5.0,
+    height=512,
+    width=512
+):
+
+    if Client is None:
+
+        raise RuntimeError(
+            "gradio_client não está instalado."
+        )
+
+    if not prompt or not prompt.strip():
+
+        raise ValueError(
+            "O prompt do vídeo está vazio."
+        )
+
+    # --------------------------------------------------------
+    # CONECTAR
+    # --------------------------------------------------------
+
+    client = Client(
+        LTX_HF_SPACE
+    )
+
+    # --------------------------------------------------------
+    # GERAR
+    # --------------------------------------------------------
+
+    resultado = client.predict(
+
+        input_image=None,
+
+        prompt=prompt.strip(),
+
+        duration=float(
+            duration
+        ),
+
+        enhance_prompt=True,
+
+        seed=0,
+
+        randomize_seed=True,
+
+        height=int(
+            height
+        ),
+
+        width=int(
+            width
+        ),
+
+        api_name="/generate_video"
+    )
+
+    # --------------------------------------------------------
+    # RESULTADO
+    # --------------------------------------------------------
+
+    if isinstance(
+        resultado,
+        (tuple, list)
+    ):
+
+        if not resultado:
+
+            raise RuntimeError(
+                "LTX-2.3 não retornou resultado."
+            )
+
+        caminho_video = (
+            resultado[0]
+        )
+
+        seed = (
+            resultado[1]
+            if len(resultado) > 1
+            else None
+        )
+
+    else:
+
+        caminho_video = resultado
+
+        seed = None
+
+    if not caminho_video:
+
+        raise RuntimeError(
+            "LTX-2.3 não retornou o vídeo."
+        )
+
+    return {
+
+        "motor":
+            "LTX-2.3 — Hugging Face",
+
+        "video":
+            str(caminho_video),
+
+        "seed":
+            seed,
+
+    }
+
+
+# ============================================================
+# 📤 MAGIC HOUR
+# OBTER URL DE UPLOAD
+# ============================================================
+
+def obter_url_upload(
+    extensao
+):
+
+    extensao = (
+        extensao
+        .lower()
+        .replace(
+            ".",
+            ""
+        )
+    )
+
+    formatos = [
+
+        "png",
+        "jpg",
+        "jpeg",
+        "webp",
+        "jfif",
+        "heic",
+        "heif",
+        "avif",
+        "bmp",
+        "tif",
+        "tiff",
+
+    ]
+
+    if extensao not in formatos:
+
+        raise RuntimeError(
+            "Formato de imagem não suportado: "
+            f"{extensao}"
+        )
+
+    dados = {
+
+        "items": [
+
+            {
+
+                "type":
+                    "image",
+
+                "extension":
+                    extensao
+
+            }
+
+        ]
+
+    }
+
+    resposta = requests.post(
+
+        f"{MAGIC_HOUR_BASE_URL}"
+        "/files/upload-urls",
+
+        headers=
+            headers_magichour(),
+
+        json=
+            dados,
+
+        timeout=60
+    )
+
+    if resposta.status_code != 200:
+
+        try:
+
+            detalhes = (
+                resposta.json()
+            )
+
+        except Exception:
+
+            detalhes = (
+                resposta.text
+            )
+
+        raise RuntimeError(
+
+            "Magic Hour retornou "
+            f"HTTP {resposta.status_code} "
+            "ao solicitar upload:\n\n"
+            f"{detalhes}"
+
+        )
+
+    resultado = (
+        resposta.json()
+    )
+
+    itens = (
+        resultado.get(
+            "items"
+        )
+    )
+
+    if not itens:
+
+        raise RuntimeError(
+
+            "Magic Hour não retornou "
+            "a lista de upload.\n\n"
+            f"{resultado}"
+
+        )
+
+    primeiro = (
+        itens[0]
+    )
+
+    upload_url = (
+        primeiro.get(
+            "upload_url"
+        )
+    )
+
+    file_path = (
+        primeiro.get(
+            "file_path"
+        )
+    )
+
+    if (
+        not upload_url
+        or
+        not file_path
+    ):
+
+        raise RuntimeError(
+
+            "A resposta não contém "
+            "upload_url e file_path.\n\n"
+            f"{resultado}"
+
+        )
+
+    return (
+        upload_url,
+        file_path
+    )
+
+
+# ============================================================
+# 🖼️ ENVIAR IMAGEM PARA MAGIC HOUR
+# ============================================================
+
+def enviar_imagem_magichour(
+    imagem_bytes,
+    nome_arquivo
+):
+
+    extensao = (
+        Path(
+            nome_arquivo
+        )
+        .suffix
+        .lower()
+        .replace(
+            ".",
+            ""
+        )
+    )
+
+    upload_url, file_path = (
+        obter_url_upload(
+            extensao
+        )
+    )
+
+    resposta = requests.put(
+
+        upload_url,
+
+        data=imagem_bytes,
+
+        timeout=120
+    )
+
+    if resposta.status_code not in [
+
+        200,
+        201,
+        204
+
+    ]:
+
+        raise RuntimeError(
+
+            "Falha no upload da imagem.\n"
+            f"HTTP {resposta.status_code}\n"
+            f"{resposta.text}"
+
+        )
+
+    return file_path
+
+
+# ============================================================
+# 🎬 CRIAR PROJETO MAGIC HOUR
+# ============================================================
+
+def criar_projeto_magichour(
+    file_path,
+    prompt
+):
+
+    dados = {
+
+        "name":
+            "Alex IA Ultra",
+
+        "end_seconds":
+            MAGIC_HOUR_DURACAO,
+
+        "model":
+            MAGIC_HOUR_MODELO,
+
+        "resolution":
+            MAGIC_HOUR_RESOLUCAO,
+
+        "audio":
+            False,
+
+        "style": {
+
+            "prompt":
+                prompt.strip()
+
+        },
+
+        "assets": {
+
+            "image_file_path":
+                file_path
+
+        }
+
+    }
+
+    resposta = requests.post(
+
+        f"{MAGIC_HOUR_BASE_URL}"
+        "/image-to-video",
+
+        headers=
+            headers_magichour(),
+
+        json=
+            dados,
+
+        timeout=120
+    )
+
+    if resposta.status_code not in [
+
+        200,
+        201,
+        202
+
+    ]:
+
+        try:
+
+            detalhes = (
+                resposta.json()
+            )
+
+        except Exception:
+
+            detalhes = (
+                resposta.text
+            )
+
+        raise RuntimeError(
+
+            "Magic Hour retornou "
+            f"HTTP {resposta.status_code} "
+            "ao criar vídeo:\n\n"
+            f"{detalhes}"
+
+        )
+
+    resultado = (
+        resposta.json()
+    )
+
+    projeto_id = (
+        resultado.get(
+            "id"
+        )
+    )
+
+    if not projeto_id:
+
+        raise RuntimeError(
+
+            "Magic Hour não retornou "
+            "o ID do vídeo.\n\n"
+            f"{resultado}"
+
+        )
+
+    return (
+        projeto_id,
+        resultado
+    )
+
+
+# ============================================================
+# 🔎 CONSULTAR PROJETO MAGIC HOUR
+# ============================================================
+
+def consultar_projeto_magichour(
+    projeto_id
+):
+
+    urls = [
+
+        (
+            f"{MAGIC_HOUR_BASE_URL}"
+            f"/video-projects/{projeto_id}"
+        ),
+
+        (
+            f"{MAGIC_HOUR_BASE_URL}"
+            f"/image-to-video/{projeto_id}"
+        ),
+
+    ]
+
+    ultimo_erro = None
+
+    for url in urls:
+
+        try:
+
+            resposta = requests.get(
+
+                url,
+
+                headers=
+                    headers_magichour(),
+
+                timeout=60
+            )
+
+        except Exception as erro:
+
+            ultimo_erro = str(
+                erro
+            )
+
+            continue
+
+        if resposta.status_code == 200:
+
+            try:
+
+                return resposta.json()
+
+            except Exception:
+
+                return {}
+
+        ultimo_erro = (
+
+            f"HTTP {resposta.status_code}: "
+            f"{resposta.text}"
+
+        )
+
+    raise RuntimeError(
+
+        "Não foi possível consultar "
+        "o projeto.\n\n"
+        f"{ultimo_erro}"
+
+    )
+
+
+# ============================================================
+# 🔗 ENCONTRAR DOWNLOAD
+# ============================================================
+
+def encontrar_download_magichour(
+    dados
+):
+
+    if not isinstance(
+        dados,
+        dict
+    ):
+
+        return None
+
+    # --------------------------------------------------------
+    # CAMPOS DIRETOS
+    # --------------------------------------------------------
+
+    campos = [
+
+        "video_url",
+        "download_url",
+        "output_url",
+        "url",
+
+    ]
+
+    for campo in campos:
+
+        valor = (
+            dados.get(
+                campo
+            )
+        )
+
+        if (
+
+            isinstance(
+                valor,
+                str
+            )
+
+            and
+
+            valor.startswith(
+                "http"
+            )
+
+        ):
+
+            return valor
+
+    # --------------------------------------------------------
+    # DOWNLOADS — DICT
+    # --------------------------------------------------------
+
+    downloads = (
+        dados.get(
+            "downloads"
+        )
+    )
+
+    if isinstance(
+        downloads,
+        dict
+    ):
+
+        for valor in (
+            downloads.values()
+        ):
+
+            if (
+
+                isinstance(
+                    valor,
+                    str
+                )
+
+                and
+
+                valor.startswith(
+                    "http"
+                )
+
+            ):
+
+                return valor
+
+            if isinstance(
+                valor,
+                dict
+            ):
+
+                for chave in [
+
+                    "url",
+                    "download_url"
+
+                ]:
+
+                    url = (
+                        valor.get(
+                            chave
+                        )
+                    )
+
+                    if (
+
+                        isinstance(
+                            url,
+                            str
+                        )
+
+                        and
+
+                        url.startswith(
+                            "http"
+                        )
+
+                    ):
+
+                        return url
+
+    # --------------------------------------------------------
+    # DOWNLOADS — LIST
+    # --------------------------------------------------------
+
+    if isinstance(
+        downloads,
+        list
+    ):
+
+        for item in downloads:
+
+            if (
+
+                isinstance(
+                    item,
+                    str
+                )
+
+                and
+
+                item.startswith(
+                    "http"
+                )
+
+            ):
+
+                return item
+
+            if isinstance(
+                item,
+                dict
+            ):
+
+                for chave in [
+
+                    "url",
+                    "download_url"
+
+                ]:
+
+                    url = (
+                        item.get(
+                            chave
+                        )
+                    )
+
+                    if (
+
+                        isinstance(
+                            url,
+                            str
+                        )
+
+                        and
+
+                        url.startswith(
+                            "http"
+                        )
+
+                    ):
+
+                        return url
+
+    # --------------------------------------------------------
+    # OUTPUT
+    # --------------------------------------------------------
+
+    output = (
+        dados.get(
+            "output"
+        )
+    )
+
+    if isinstance(
+        output,
+        dict
+    ):
+
+        for valor in (
+            output.values()
+        ):
+
+            if (
+
+                isinstance(
+                    valor,
+                    str
+                )
+
+                and
+
+                valor.startswith(
+                    "http"
+                )
+
+            ):
+
+                return valor
+
+    return None
+
+
+# ============================================================
+# ⬇️ BAIXAR VÍDEO MAGIC HOUR
+# ============================================================
+
+def baixar_video_magichour(
+    url
+):
+
+    caminho = (
+        PASTA /
+        "video_magichour.mp4"
+    )
+
+    resposta = requests.get(
+
+        url,
+
+        timeout=180
+    )
+
+    if resposta.status_code != 200:
+
+        raise RuntimeError(
+
+            "Falha ao baixar o vídeo.\n"
+            f"HTTP {resposta.status_code}"
+
+        )
+
+    caminho.write_bytes(
+        resposta.content
+    )
+
+    return str(
+        caminho
+    )
+
+
+# ============================================================
+# 🎬 GERAR MAGIC HOUR
+# ============================================================
+
+def gerar_magichour(
+    imagem_bytes,
+    nome_arquivo,
+    prompt,
+    timeout_segundos=300
+):
+
+    if not imagem_bytes:
+
+        raise ValueError(
+
+            "O Magic Hour precisa "
+            "de uma imagem."
+
+        )
+
+    if not prompt or not prompt.strip():
+
+        raise ValueError(
+            "O prompt do vídeo está vazio."
+        )
+
+    # --------------------------------------------------------
+    # 1 — UPLOAD
+    # --------------------------------------------------------
+
+    file_path = (
+        enviar_imagem_magichour(
+
+            imagem_bytes,
+
+            nome_arquivo
+
+        )
+    )
+
+    # --------------------------------------------------------
+    # 2 — CRIAR PROJETO
+    # --------------------------------------------------------
+
+    projeto_id, resultado = (
+        criar_projeto_magichour(
+
+            file_path,
+
+            prompt
+
+        )
+    )
+
+    # --------------------------------------------------------
+    # 3 — PROCESSAMENTO
+    # --------------------------------------------------------
+
+    inicio = time.time()
+
+    ultimo_resultado = (
+        resultado
+    )
+
+    video_url = (
+        encontrar_download_magichour(
+            ultimo_resultado
+        )
+    )
+
+    while not video_url:
+
+        if (
+            time.time()
+            -
+            inicio
+            >=
+            timeout_segundos
+        ):
+
+            raise RuntimeError(
+
+                "Tempo limite atingido "
+                "no Magic Hour.\n\n"
+
+                f"Última resposta:\n"
+                f"{ultimo_resultado}"
+
+            )
+
+        time.sleep(5)
+
+        ultimo_resultado = (
+            consultar_projeto_magichour(
+                projeto_id
+            )
+        )
+
+        status = str(
+
+            ultimo_resultado.get(
+
+                "status",
+
+                "processing"
+
+            )
+
+        ).lower()
+
+        if status in [
+
+            "failed",
+            "error",
+            "cancelled"
+
+        ]:
+
+            raise RuntimeError(
+
+                "A geração no Magic Hour "
+                "falhou.\n\n"
+
+                f"{ultimo_resultado}"
+
+            )
+
+        video_url = (
+            encontrar_download_magichour(
+                ultimo_resultado
+            )
+        )
+
+    # --------------------------------------------------------
+    # 4 — DOWNLOAD
+    # --------------------------------------------------------
+
+    caminho = (
+        baixar_video_magichour(
+            video_url
+        )
+    )
+
+    return {
+
+        "motor":
+            "Magic Hour — LTX-2.3",
+
+        "video":
+            caminho,
+
+        "projeto_id":
+            projeto_id,
+
+        "url":
+            video_url,
+
+    }
+
+
+# ============================================================
+# 🤖 GERADOR AUTOMÁTICO
+# ============================================================
+
+def gerar_video_automatico(
+    prompt,
+    imagem_bytes=None,
+    nome_imagem="imagem.png",
+    duracao=5.0,
+    width=512,
+    height=512
+):
+
     """
-    Baixa o vídeo gerado pelo Google
-    e salva como MP4.
+    SISTEMA AUTOMÁTICO.
+
+    COM IMAGEM:
+
+        1º Magic Hour
+        2º LTX-2.3 Hugging Face
+
+    SEM IMAGEM:
+
+        LTX-2.3 Hugging Face
+
+    Se um motor falhar, o próximo é acionado.
     """
+
+    erros = []
+
+    # ========================================================
+    # 🥇 PRIMEIRO MOTOR — MAGIC HOUR
+    # ========================================================
+
+    if imagem_bytes:
+
+        try:
+
+            resultado = (
+                gerar_magichour(
+
+                    imagem_bytes=
+                        imagem_bytes,
+
+                    nome_arquivo=
+                        nome_imagem,
+
+                    prompt=
+                        prompt
+
+                )
+            )
+
+            resultado[
+                "fallback"
+            ] = False
+
+            resultado[
+                "erros_anteriores"
+            ] = erros
+
+            return resultado
+
+        except Exception as erro:
+
+            erros.append(
+
+                "Magic Hour: "
+                +
+                str(erro)
+
+            )
+
+    # ========================================================
+    # 🥈 SEGUNDO MOTOR — LTX-2.3 HUGGING FACE
+    # ====# ============================================================
 
     try:
 
-        pasta = obter_pasta_videos()
-
-        caminho = pasta / nome
-
-        cliente.files.download(
-            file=video
+        resultado = gerar_ltx_huggingface(
+            prompt=prompt,
+            duration=duracao,
+            height=height,
+            width=width
         )
 
-        video.save(
-            str(caminho)
+        resultado["fallback"] = bool(erros)
+
+        resultado["erros_anteriores"] = erros
+
+        return resultado
+
+    except Exception as erro:
+
+        erros.append(
+            "LTX-2.3 Hugging Face: "
+            + str(erro)
         )
-
-        if not caminho.exists():
-            return None
-
-        if caminho.stat().st_size == 0:
-            return None
-
-        return str(caminho)
-
-    except Exception:
-        return None
 
 
 # ============================================================
-# ⏳ AGUARDAR GERAÇÃO
+# ❌ NENHUM MOTOR FUNCIONOU
 # ============================================================
 
-def aguardar_video(
-    cliente,
-    operacao,
-):
-    """
-    Aguarda o Veo terminar a geração.
-    """
-
-    while not operacao.done:
-
-        time.sleep(10)
-
-        operacao = cliente.operations.get(
-            operacao
-        )
-
-    erro_operacao = getattr(
-        operacao,
-        "error",
-        None
+    raise RuntimeError(
+        "❌ NENHUM MOTOR DE VÍDEO CONSEGUIU GERAR O VÍDEO.\n\n"
+        + "\n\n".join(erros)
     )
-
-    if erro_operacao:
-
-        return (
-            None,
-            f"❌ Erro na geração do vídeo: "
-            f"{erro_operacao}"
-        )
-
-    resposta = getattr(
-        operacao,
-        "response",
-        None
-    )
-
-    if resposta is None:
-
-        return (
-            None,
-            "❌ O Veo terminou, mas não retornou uma resposta."
-        )
-
-    videos = getattr(
-        resposta,
-        "generated_videos",
-        None
-    )
-
-    if not videos:
-
-        return (
-            None,
-            "❌ O Veo terminou, mas não retornou nenhum vídeo."
-        )
-
-    video = getattr(
-        videos[0],
-        "video",
-        None
-    )
-
-    if video is None:
-
-        return (
-            None,
-            "❌ A resposta do Veo não contém o arquivo de vídeo."
-        )
-
-    return video, None
 
 
 # ============================================================
-# 🎬 GERAR VÍDEO
+# 🎬 FUNÇÃO PRINCIPAL
 # ============================================================
 
 def gerar_video(
-    descricao,
-    camera="ARRI Alexa Mini LF",
-    proporcao="16:9",
-    duracao=8,
-    imagem_referencia=None,
+    prompt,
+    imagem_bytes=None,
+    nome_imagem="imagem.png",
+    duracao=5.0,
+    width=512,
+    height=512
 ):
-    """
-    Gera um vídeo cinematográfico usando o Veo 3.1.
-    Mantém a assinatura utilizada pelo app.py.
-    """
 
-    prompt = preparar_prompt_video(
-        descricao=descricao,
-        camera=camera,
-        proporcao=proporcao,
+    return gerar_video_automatico(
+        prompt=prompt,
+        imagem_bytes=imagem_bytes,
+        nome_imagem=nome_imagem,
         duracao=duracao,
+        width=width,
+        height=height
     )
-
-    if not prompt:
-
-        return (
-            None,
-            "❌ A descrição do vídeo está vazia."
-        )
-
-    # --------------------------------------------------------
-    # 🔐 Cliente Gemini
-    # --------------------------------------------------------
-
-    cliente = criar_cliente_gemini()
-
-    if cliente is None:
-
-        return (
-            None,
-            "❌ Não foi possível criar o cliente Gemini. "
-            "Verifique GEMINI_API_KEY nos Secrets."
-        )
-
-    # --------------------------------------------------------
-    # 🎬 Configuração
-    # --------------------------------------------------------
-
-    try:
-
-        config = types.GenerateVideosConfig(
-            number_of_videos=1,
-            aspect_ratio=proporcao,
-            resolution="720p",
-        )
-
-        # ----------------------------------------------------
-        # 🖼️ Imagem inicial
-        # ----------------------------------------------------
-
-        if imagem_referencia:
-
-            imagem = types.Image.from_file(
-                location=str(imagem_referencia)
-            )
-
-            operacao = cliente.models.generate_videos(
-                model=MODELO_VEO,
-                prompt=prompt,
-                image=imagem,
-                config=config,
-            )
-
-        # ----------------------------------------------------
-        # 🎬 Texto para vídeo
-        # ----------------------------------------------------
-
-        else:
-
-            operacao = cliente.models.generate_videos(
-                model=MODELO_VEO,
-                prompt=prompt,
-                config=config,
-            )
-
-        # ----------------------------------------------------
-        # ⏳ Esperar
-        # ----------------------------------------------------
-
-        video, erro_video = aguardar_video(
-            cliente,
-            operacao
-        )
-
-        if erro_video:
-
-            return (
-                None,
-                erro_video
-            )
-
-        # ----------------------------------------------------
-        # 💾 Salvar
-        # ----------------------------------------------------
-
-        caminho = salvar_video(
-            cliente,
-            video,
-            "video_inicial.mp4"
-        )
-
-        if not caminho:
-
-            return (
-                None,
-                "❌ O vídeo foi gerado, "
-                "mas não pôde ser salvo."
-            )
-
-        # ----------------------------------------------------
-        # 🧠 Guardar estado
-        # ----------------------------------------------------
-
-        st.session_state.video_veo_atual = video
-
-        st.session_state.video_caminho_atual = caminho
-
-        st.session_state.video_duracao_aproximada = (
-            DURACAO_VIDEO
-        )
-
-        st.session_state.video_cenas = 1
-
-        st.session_state.video_camera_atual = camera
-
-        st.session_state.video_proporcao_atual = proporcao
-
-        st.session_state.video_descricao_atual = descricao
-
-        return (
-            caminho,
-            "🎬 Vídeo inicial gerado com sucesso."
-        )
-
-    except Exception as erro:
-
-        return (
-            None,
-            f"❌ Erro ao gerar o vídeo: {erro}"
-        )
-
-
-# ============================================================
-# 🔄 CONTINUAR VÍDEO
-# ============================================================
-
-def continuar_video(
-    descricao_continuacao
-):
-    """
-    Estende o último vídeo Veo em aproximadamente 7 segundos.
-    """
-
-    video_anterior = st.session_state.get(
-        "video_veo_atual"
-    )
-
-    if video_anterior is None:
-
-        return (
-            None,
-            "❌ Ainda não existe um vídeo para continuar."
-        )
-
-    cliente = criar_cliente_gemini()
-
-    if cliente is None:
-
-        return (
-            None,
-            "❌ Não foi possível criar o cliente Gemini. "
-            "Verifique GEMINI_API_KEY nos Secrets."
-        )
-
-    duracao_atual = st.session_state.get(
-        "video_duracao_aproximada",
-        DURACAO_VIDEO
-    )
-
-    if duracao_atual >= DURACAO_MAXIMA_VIDEO:
-
-        return (
-            None,
-            "⚠️ O limite aproximado de extensão "
-            "desta sequência foi alcançado."
-        )
-
-    descricao_continuacao = (
-        descricao_continuacao or ""
-    ).strip()
-
-    if not descricao_continuacao:
-
-        descricao_continuacao = (
-            "Continue naturalmente a ação "
-            "a partir do último momento do vídeo anterior."
-        )
-
-    camera = st.session_state.get(
-        "video_camera_atual",
-        "ARRI Alexa Mini LF"
-    )
-
-    proporcao = st.session_state.get(
-        "video_proporcao_atual",
-        "16:9"
-    )
-
-    # --------------------------------------------------------
-    # 🎬 Prompt da continuação
-    # --------------------------------------------------------
-
-    prompt = f"""
-CONTINUAÇÃO DIRETA DO VÍDEO ANTERIOR
-
-Continue a ação exatamente a partir do
-último momento do vídeo anterior.
-
-NOVA AÇÃO:
-
-{descricao_continuacao}
-
-CONTINUIDADE OBRIGATÓRIA
-
-Preserve:
-
-- identidade dos personagens;
-- rosto;
-- cabelos;
-- olhos;
-- idade aparente;
-- roupas;
-- acessórios;
-- cenário;
-- iluminação;
-- clima;
-- horário;
-- objetos importantes;
-- estilo visual;
-- perspectiva;
-- direção cinematográfica.
-
-Não reinicie a cena.
-
-Não transforme o personagem.
-
-Não troque a roupa sem instrução explícita.
-
-Não mude repentinamente o cenário.
-
-A continuação deve começar naturalmente
-a partir do último momento do vídeo anterior.
-
-FOCO DA CÂMERA
-
-Mantenha o personagem principal como foco
-quando ele estiver presente.
-
-Se a câmera perder o personagem durante
-o movimento, faça um reenquadramento
-cinematográfico natural.
-
-Retorne o foco ao personagem sem alterar
-sua identidade.
-
-Câmera de referência: {camera}
-
-Proporção: {proporcao}
-
-Continue a ação de maneira cinematográfica,
-natural, coerente e fisicamente plausível.
-""".strip()
-
-    try:
-
-        operacao = cliente.models.generate_videos(
-            model=MODELO_VEO,
-            video=video_anterior,
-            prompt=prompt,
-            config=types.GenerateVideosConfig(
-                number_of_videos=1,
-                resolution="720p",
-            ),
-        )
-
-        # ----------------------------------------------------
-        # ⏳ Esperar
-        # ----------------------------------------------------
-
-        video_novo, erro_video = aguardar_video(
-            cliente,
-            operacao
-        )
-
-        if erro_video:
-
-            return (
-                None,
-                erro_video
-            )
-
-        # ----------------------------------------------------
-        # 🔢 Número da cena
-        # ----------------------------------------------------
-
-        numero_cena = (
-            st.session_state.get(
-                "video_cenas",
-                1
-            ) + 1
-        )
-
-        # ----------------------------------------------------
-        # 💾 Salvar
-        # ----------------------------------------------------
-
-        caminho = salvar_video(
-            cliente,
-            video_novo,
-            f"video_cena_{numero_cena}.mp4"
-        )
-
-        if not caminho:
-
-            return (
-                None,
-                "❌ A continuação foi gerada, "
-                "mas não pôde ser salva."
-            )
-
-        # ----------------------------------------------------
-        # 🧠 Atualizar estado
-        # ----------------------------------------------------
-
-        st.session_state.video_veo_atual = (
-            video_novo
-        )
-
-        st.session_state.video_caminho_atual = (
-            caminho
-        )
-
-        st.session_state.video_cenas = (
-            numero_cena
-        )
-
-        st.session_state.video_duracao_aproximada = min(
-            duracao_atual + EXTENSAO_SEGUNDOS,
-            DURACAO_MAXIMA_VIDEO,
-        )
-
-        return (
-            caminho,
-            f"🎬 Continuação gerada! "
-            f"Cena {numero_cena} — aproximadamente "
-            f"{st.session_state.video_duracao_aproximada} "
-            f"segundos no total."
-        )
-
-    except Exception as erro:
-
-        return (
-            None,
-            f"❌ Erro ao continuar o vídeo: {erro}"
-        )
-
-
-# ============================================================
-# 🧹 RESETAR PROJETO DE VÍDEO
-# ============================================================
-
-def resetar_video():
-    """
-    Limpa o projeto de vídeo atual.
-    """
-
-    chaves = [
-        "video_veo_atual",
-        "video_caminho_atual",
-        "video_duracao_aproximada",
-        "video_cenas",
-        "video_camera_atual",
-        "video_proporcao_atual",
-        "video_descricao_atual",
-    ]
-
-    for chave in chaves:
-
-        st.session_state.pop(
-            chave,
-            None
-        )
 
 
 # ============================================================
@@ -713,276 +1235,56 @@ def resetar_video():
 
 def mostrar_configuracao_video():
 
-    camera = st.selectbox(
-        "🎥 Câmera cinematográfica",
-        CAMERAS,
-        index=3,
-        key="video_camera",
-    )
+    st.subheader("🎬 Configuração de Vídeo")
 
-    proporcao = st.selectbox(
-        "📐 Proporção",
-        PROPORCOES,
-        index=0,
-        key="video_proporcao",
-    )
+    st.write("**🎥 Motores disponíveis:**")
 
-    st.info(
-        "🎬 O Veo 3.1 gera vídeos de aproximadamente "
-        "8 segundos. Depois você pode usar "
-        "'Continuar vídeo' para acrescentar "
-        "aproximadamente 7 segundos."
-    )
+    for motor in MOTORES_VIDEO:
+        st.write(f"• {motor}")
 
-    return (
-        camera,
-        proporcao,
-        DURACAO_VIDEO
+    st.write("**📷 Câmeras:**")
+
+    for camera in CAMERAS:
+        st.write(f"• {camera}")
+
+    st.write("**📐 Proporções:**")
+
+    for proporcao in PROPORCOES:
+        st.write(f"• {proporcao}")
+
+    st.write(
+        f"**⏱️ Duração padrão:** "
+        f"{DURACAO_PADRAO} segundos"
     )
 
 
 # ============================================================
-# 🎬 GERADOR INDEPENDENTE
+# 🎬 TEXTO → VÍDEO
 # ============================================================
 
-def mostrar_gerador_video():
+def gerar_video_texto(
+    prompt,
+    duracao=5.0
+):
 
-    st.subheader(
-        "🎬 Gerador de Vídeo Cinematográfico"
+    return gerar_ltx_huggingface(
+        prompt=prompt,
+        duration=duracao
     )
-
-    camera, proporcao, duracao = (
-        mostrar_configuracao_video()
-    )
-
-    descricao = st.text_area(
-        "🎞️ Descreva o vídeo que deseja criar",
-        placeholder=(
-            "Exemplo: uma mulher caminhando por "
-            "uma cidade futurista à noite enquanto "
-            "a câmera acompanha seus passos..."
-        ),
-        height=150,
-        key="video_descricao",
-    )
-
-    imagem_referencia = st.file_uploader(
-        "🖼️ Imagem de referência do personagem ou cena",
-        type=[
-            "png",
-            "jpg",
-            "jpeg",
-            "webp"
-        ],
-        key="video_imagem_referencia",
-    )
-
-    caminho_imagem = None
-
-    if imagem_referencia:
-
-        pasta = obter_pasta_videos()
-
-        caminho_imagem = (
-            pasta /
-            f"referencia_{imagem_referencia.name}"
-        )
-
-        with open(
-            caminho_imagem,
-            "wb"
-        ) as arquivo:
-
-            arquivo.write(
-                imagem_referencia.getbuffer()
-            )
-
-        st.image(
-            imagem_referencia,
-            caption="🖼️ Referência selecionada",
-            use_container_width=True,
-        )
-
-    # ========================================================
-    # 🎬 GERAR
-    # ========================================================
-
-    if st.button(
-        "🎬 Gerar vídeo",
-        type="primary",
-        key="gerar_video_ultra",
-    ):
-
-        if not descricao.strip():
-
-            st.warning(
-                "Digite uma descrição para o vídeo."
-            )
-
-        else:
-
-            with st.spinner(
-                "🎬 O Veo 3.1 está criando "
-                "seu vídeo cinematográfico..."
-            ):
-
-                caminho, mensagem = gerar_video(
-                    descricao=descricao,
-                    camera=camera,
-                    proporcao=proporcao,
-                    duracao=duracao,
-                    imagem_referencia=caminho_imagem,
-                )
-
-            if caminho:
-
-                st.success(
-                    mensagem
-                )
-
-                st.video(
-                    caminho
-                )
-
-                st.info(
-                    "🎬 Cena 1 — aproximadamente "
-                    "8 segundos."
-                )
-
-            else:
-
-                st.error(
-                    mensagem
-                )
-
-    # ========================================================
-    # 🔄 CONTINUAR
-    # ========================================================
-
-    if "video_veo_atual" in st.session_state:
-
-        st.divider()
-
-        st.subheader(
-            "🔄 Continuar vídeo"
-        )
-
-        duracao_atual = st.session_state.get(
-            "video_duracao_aproximada",
-            DURACAO_VIDEO
-        )
-
-        cenas = st.session_state.get(
-            "video_cenas",
-            1
-        )
-
-        st.write(
-            f"🎞️ Cenas/extensões: **{cenas}**"
-        )
-
-        st.write(
-            f"⏱️ Duração aproximada: "
-            f"**{duracao_atual} segundos**"
-        )
-
-        if duracao_atual < DURACAO_MAXIMA_VIDEO:
-
-            descricao_continuacao = st.text_area(
-                "🎞️ O que deve acontecer depois?",
-                placeholder=(
-                    "Exemplo: o personagem continua "
-                    "caminhando e entra em uma estação "
-                    "subterrânea futurista..."
-                ),
-                height=120,
-                key=f"continuacao_{cenas}",
-            )
-
-            if st.button(
-                "🔄 Continuar vídeo",
-                type="primary",
-                key=f"continuar_video_{cenas}",
-            ):
-
-                with st.spinner(
-                    "🎬 Continuando o vídeo por "
-                    "mais aproximadamente 7 segundos..."
-                ):
-
-                    caminho, mensagem = (
-                        continuar_video(
-                            descricao_continuacao
-                        )
-                    )
-
-                if caminho:
-
-                    st.success(
-                        mensagem
-                    )
-
-                    st.video(
-                        caminho
-                    )
-
-                else:
-
-                    st.error(
-                        mensagem
-                    )
-
-        else:
-
-            st.warning(
-                "⚠️ O limite aproximado de "
-                "extensão desta sequência foi alcançado."
-            )
-
-        # ====================================================
-        # 🆕 NOVO VÍDEO
-        # ====================================================
-
-        if st.button(
-            "🆕 Começar novo vídeo",
-            key="novo_video_ultra",
-        ):
-
-            resetar_video()
-
-            st.rerun()
 
 
 # ============================================================
-# ▶️ EXECUÇÃO DIRETA DO MÓDULO
+# 🖼️ IMAGEM → VÍDEO
 # ============================================================
 
-if __name__ == "__main__":
+def gerar_video_imagem(
+    imagem_bytes,
+    nome_imagem,
+    prompt
+):
 
-    st.set_page_config(
-        page_title="Alex IA Ultra — Vídeo",
-        page_icon="🎬",
-        layout="wide",
-    )
-
-    st.title(
-        "🤖 Alex IA Ultra"
-    )
-
-    st.caption(
-        "🎬 Sistema de geração de vídeo cinematográfico"
-    )
-
-    mostrar_gerador_video()
-
-
-
-
-
-
-
-
-
-
-
-                            
+    return gerar_magichour(
+        imagem_bytes=imagem_bytes,
+        nome_arquivo=nome_imagem,
+        prompt=prompt
+)
