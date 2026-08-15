@@ -1598,6 +1598,28 @@ def interface_teste():
 # ▶️ EXECUÇÃO DIRETA
 # ============================================================
 
+def mostrar_configuracao_video():
+    st.subheader("🎬 Configuração de Vídeo")
+
+    st.write("**Motores disponíveis:**")
+
+    for motor in MOTORES_VIDEO:
+        st.write(f"• {motor}")
+
+    st.write("**Câmeras cinematográficas:**")
+
+    for camera in CAMERAS:
+        st.write(f"• {camera}")
+
+    st.write("**Proporções disponíveis:**")
+
+    for proporcao in PROPORCOES:
+        st.write(f"• {proporcao}")
+
+    st.write(
+        f"**Duração padrão:** {DURACAO_PADRAO} segundos"
+    )
+
 if __name__ == "__main__":
 
     interface_teste()
