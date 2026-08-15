@@ -488,44 +488,127 @@ if ferramenta:
                     st.rerun()
 
     # --------------------------------------------------------
+
     # 🎬 VÍDEO
     # --------------------------------------------------------
     elif ferramenta == "video":
+
         st.caption("Configuração atual do gerador de vídeo.")
-        camera_video, proporcao_video, duracao_video = mostrar_configuracao_video()
+
+        camera_video, proporcao_video, duracao_video = (
+            mostrar_configuracao_video()
+        )
 
         descricao_video = st.text_area(
             "Descrição do vídeo",
             key="tool_prompt_video",
-            placeholder="Ex.: o personagem caminha lentamente enquanto a câmera acompanha...",
-            height=100,
+            placeholder=(
+                "Ex.: uma menina caminhando lentamente "
+                "em uma praia ao pôr do sol..."
+            ),
+            height=120,
         )
 
-        if st.button("🎬 Gerar vídeo", key="gerar_video_tool", type="primary"):
-            if not descricao_video.strip():
-                st.warning("Digite a descrição do vídeo.")
-            else:
-                with st.spinner("🎬 Gerando vídeo..."):
-                    caminho_video, mensagem_video = gerar_video(
-                        descricao=descricao_video.strip(),
-                        camera=camera_video,
-                        proporcao=proporcao_video,
-                        duracao=duracao_video,
-                    )
+        if st.button(
+            "🎬 Gerar vídeo",
+            key="gerar_video_tool",
+            type="primary",
+        ):
 
-                if caminho_video:
-                    st.success("🎬 Vídeo gerado com sucesso!")
-                    st.video(caminho_video)
-                    st.session_state.mensagens.append({
-                        "role": "assistant",
-                        "content": "🎬 Vídeo criado.",
-                        "tipo": "video",
-                        "arquivo": caminho_video,
-                    })
-                    st.session_state.ferramenta_ativa = None
-                    st.rerun()
-                else:
-                    st.error(mensagem_video)
+            if not descricao_video.strip():
+
+                st.warning(
+                    "⚠️ Digite a descrição do vídeo."
+                )
+
+            else:
+
+                # ------------------------------------------------
+                # 🎥 PREPARAR PROMPT
+                # ------------------------------------------------
+
+                prompt_video = (
+                    descricao_video.strip()
+                    + "\n\n"
+                    + f"Câmera cinematográfica: {camera_video}."
+                    + f"\nProporção desejada: {proporcao_video}."
+                    + "\nMovimento natural e cinematográfico."
+                    + "\nManter o mesmo personagem durante toda a cena."
+                )
+
+                # ------------------------------------------------
+                # 🎬 GERAR
+                # ------------------------------------------------
+
+                with st.spinner(
+                    "🎬 Gerando seu vídeo..."
+                ):
+
+                    try:
+
+                        resultado_video = gerar_video(
+                            prompt=prompt_video,
+                            duracao=float(duracao_video),
+                            width=512,
+                            height=512,
+                        )
+
+                        # ------------------------------------------
+                        # ✅ SUCESSO
+                        # ------------------------------------------
+
+                        caminho_video = resultado_video.get(
+                            "video"
+                        )
+
+                        motor_video = resultado_video.get(
+                            "motor",
+                            "Motor desconhecido"
+                        )
+
+                        if caminho_video:
+
+                            st.success(
+                                "🎉 Vídeo gerado com sucesso!"
+                            )
+
+                            st.caption(
+                                f"🎥 Motor utilizado: {motor_video}"
+                            )
+
+                            st.video(
+                                caminho_video
+                            )
+
+                            st.session_state.mensagens.append({
+                                "role": "assistant",
+                                "content": (
+                                    "🎬 Vídeo criado com sucesso."
+                                ),
+                                "tipo": "video",
+                                "arquivo": caminho_video,
+                            })
+
+                            st.session_state.ferramenta_ativa = None
+
+                            st.rerun()
+
+                        else:
+
+                            st.error(
+                                "❌ O motor terminou, "
+                                "mas não retornou o arquivo de vídeo."
+                            )
+
+                    except Exception as erro:
+
+                        st.error(
+                            "❌ Não foi possível gerar o vídeo."
+                        )
+
+                        st.code(
+                            str(erro)
+                        )
 
     # --------------------------------------------------------
     # 🔊 VOZ
