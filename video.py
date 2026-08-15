@@ -1477,3 +1477,18 @@ def gerar_video_imagem(
             nome_imagem
 
     )
+    # ============================================================
+# 🔎 TESTE MAGIC HOUR
+# ============================================================
+
+def verificar_magic_hour():
+    try:
+        chave = obter_api_key_magichour()
+
+        if chave:
+            return True, "✅ MAGIC_HOUR_API_KEY foi encontrada."
+        else:
+            return False, "❌ MAGIC_HOUR_API_KEY não foi encontrada."
+
+    except Exception as erro:
+        return False, f"❌ Erro ao verificar Magic Hour: {erro}"
