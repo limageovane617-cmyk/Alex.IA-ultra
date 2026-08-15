@@ -3,8 +3,8 @@
 # Alex IA Ultra
 #
 # MOTORES:
-# 1. LTX-2.3 — Hugging Face
-# 2. Magic Hour — LTX-2.3
+# 1. Magic Hour — LTX-2.3
+# 2. LTX-2.3 — Hugging Face
 #
 # COM IMAGEM:
 #     Magic Hour → LTX-2.3 como fallback
@@ -16,10 +16,10 @@
 import os
 import time
 from pathlib import Path
-from typing import Optional, Tuple, Dict, Any
 
 import requests
 import streamlit as st
+
 
 try:
     from gradio_client import Client
@@ -33,10 +33,12 @@ except ImportError:
 
 NOME_MODULO = "Alex IA Ultra — Gerenciador de Vídeo"
 
+
 MOTORES_VIDEO = [
     "LTX-2.3 — Hugging Face",
     "Magic Hour — LTX-2.3",
 ]
+
 
 CAMERAS = [
     "Sony FX5",
@@ -45,11 +47,13 @@ CAMERAS = [
     "ARRI Alexa Mini LF",
 ]
 
+
 PROPORCOES = [
     "1:1",
     "16:9",
     "9:16",
 ]
+
 
 DURACAO_PADRAO = 5
 
@@ -193,6 +197,7 @@ def gerar_ltx_huggingface(
             "O prompt do vídeo está vazio."
         )
 
+
     # --------------------------------------------------------
     # 🖼️ PREPARAR IMAGEM
     # --------------------------------------------------------
@@ -208,16 +213,20 @@ def gerar_ltx_huggingface(
         )
 
         if not extensao:
+
             extensao = ".png"
+
 
         caminho_imagem = (
             PASTA /
             f"imagem_ltx{extensao}"
         )
 
+
         caminho_imagem.write_bytes(
             imagem_bytes
         )
+
 
     # --------------------------------------------------------
     # 🔗 CONECTAR AO HUGGING FACE
@@ -226,6 +235,7 @@ def gerar_ltx_huggingface(
     client = Client(
         LTX_HF_SPACE
     )
+
 
     # --------------------------------------------------------
     # 🎬 GERAR VÍDEO
@@ -262,6 +272,7 @@ def gerar_ltx_huggingface(
         api_name="/generate_video"
     )
 
+
     # --------------------------------------------------------
     # 📦 RESULTADO
     # --------------------------------------------------------
@@ -277,9 +288,11 @@ def gerar_ltx_huggingface(
                 "LTX-2.3 não retornou resultado."
             )
 
+
         caminho_video = (
             resultado[0]
         )
+
 
         seed = (
             resultado[1]
@@ -293,11 +306,13 @@ def gerar_ltx_huggingface(
 
         seed = None
 
+
     if not caminho_video:
 
         raise RuntimeError(
             "LTX-2.3 não retornou o vídeo."
         )
+
 
     return {
 
@@ -310,12 +325,11 @@ def gerar_ltx_huggingface(
         "seed":
             seed,
 
-        }
+    }
 
 
 # ============================================================
-# 📤 MAGIC HOUR
-# OBTER URL DE UPLOAD
+# 📤 MAGIC HOUR — OBTER URL DE UPLOAD
 # ============================================================
 
 def obter_url_upload(
@@ -330,6 +344,7 @@ def obter_url_upload(
             ""
         )
     )
+
 
     formatos = [
 
@@ -347,12 +362,14 @@ def obter_url_upload(
 
     ]
 
+
     if extensao not in formatos:
 
         raise RuntimeError(
             "Formato de imagem não suportado: "
             f"{extensao}"
         )
+
 
     dados = {
 
@@ -372,6 +389,7 @@ def obter_url_upload(
 
     }
 
+
     resposta = requests.post(
 
         f"{MAGIC_HOUR_BASE_URL}"
@@ -385,6 +403,7 @@ def obter_url_upload(
 
         timeout=60
     )
+
 
     if resposta.status_code != 200:
 
@@ -400,6 +419,7 @@ def obter_url_upload(
                 resposta.text
             )
 
+
         raise RuntimeError(
 
             "Magic Hour retornou "
@@ -409,15 +429,18 @@ def obter_url_upload(
 
         )
 
+
     resultado = (
         resposta.json()
     )
+
 
     itens = (
         resultado.get(
             "items"
         )
     )
+
 
     if not itens:
 
@@ -429,9 +452,11 @@ def obter_url_upload(
 
         )
 
+
     primeiro = (
         itens[0]
     )
+
 
     upload_url = (
         primeiro.get(
@@ -439,11 +464,13 @@ def obter_url_upload(
         )
     )
 
+
     file_path = (
         primeiro.get(
             "file_path"
         )
     )
+
 
     if (
         not upload_url
@@ -458,6 +485,7 @@ def obter_url_upload(
             f"{resultado}"
 
         )
+
 
     return (
         upload_url,
@@ -486,11 +514,18 @@ def enviar_imagem_magichour(
         )
     )
 
+
+    if not extensao:
+
+        extensao = "png"
+
+
     upload_url, file_path = (
         obter_url_upload(
             extensao
         )
     )
+
 
     resposta = requests.put(
 
@@ -500,6 +535,7 @@ def enviar_imagem_magichour(
 
         timeout=120
     )
+
 
     if resposta.status_code not in [
 
@@ -516,6 +552,7 @@ def enviar_imagem_magichour(
             f"{resposta.text}"
 
         )
+
 
     return file_path
 
@@ -562,6 +599,7 @@ def criar_projeto_magichour(
 
     }
 
+
     resposta = requests.post(
 
         f"{MAGIC_HOUR_BASE_URL}"
@@ -575,6 +613,7 @@ def criar_projeto_magichour(
 
         timeout=120
     )
+
 
     if resposta.status_code not in [
 
@@ -596,6 +635,7 @@ def criar_projeto_magichour(
                 resposta.text
             )
 
+
         raise RuntimeError(
 
             "Magic Hour retornou "
@@ -605,15 +645,18 @@ def criar_projeto_magichour(
 
         )
 
+
     resultado = (
         resposta.json()
     )
+
 
     projeto_id = (
         resultado.get(
             "id"
         )
     )
+
 
     if not projeto_id:
 
@@ -624,6 +667,7 @@ def criar_projeto_magichour(
             f"{resultado}"
 
         )
+
 
     return (
         projeto_id,
@@ -653,7 +697,9 @@ def consultar_projeto_magichour(
 
     ]
 
+
     ultimo_erro = None
+
 
     for url in urls:
 
@@ -677,6 +723,7 @@ def consultar_projeto_magichour(
 
             continue
 
+
         if resposta.status_code == 200:
 
             try:
@@ -687,12 +734,14 @@ def consultar_projeto_magichour(
 
                 return {}
 
+
         ultimo_erro = (
 
             f"HTTP {resposta.status_code}: "
             f"{resposta.text}"
 
         )
+
 
     raise RuntimeError(
 
@@ -718,6 +767,7 @@ def encontrar_download_magichour(
 
         return None
 
+
     # --------------------------------------------------------
     # CAMPOS DIRETOS
     # --------------------------------------------------------
@@ -731,6 +781,7 @@ def encontrar_download_magichour(
 
     ]
 
+
     for campo in campos:
 
         valor = (
@@ -738,6 +789,7 @@ def encontrar_download_magichour(
                 campo
             )
         )
+
 
         if (
 
@@ -756,8 +808,9 @@ def encontrar_download_magichour(
 
             return valor
 
+
     # --------------------------------------------------------
-    # DOWNLOADS — DICT
+    # DOWNLOADS
     # --------------------------------------------------------
 
     downloads = (
@@ -766,129 +819,84 @@ def encontrar_download_magichour(
         )
     )
 
+
     if isinstance(
         downloads,
         dict
     ):
 
-        for valor in (
+        valores = (
             downloads.values()
-        ):
+        )
 
-            if (
-
-                isinstance(
-                    valor,
-                    str
-                )
-
-                and
-
-                valor.startswith(
-                    "http"
-                )
-
-            ):
-
-                return valor
-
-            if isinstance(
-                valor,
-                dict
-            ):
-
-                for chave in [
-
-                    "url",
-                    "download_url"
-
-                ]:
-
-                    url = (
-                        valor.get(
-                            chave
-                        )
-                    )
-
-                    if (
-
-                        isinstance(
-                            url,
-                            str
-                        )
-
-                        and
-
-                        url.startswith(
-                            "http"
-                        )
-
-                    ):
-
-                        return url
-
-    # --------------------------------------------------------
-    # DOWNLOADS — LIST
-    # --------------------------------------------------------
-
-    if isinstance(
+    elif isinstance(
         downloads,
         list
     ):
 
-        for item in downloads:
+        valores = downloads
 
-            if (
+    else:
 
-                isinstance(
-                    item,
-                    str
+        valores = []
+
+
+    for valor in valores:
+
+        if (
+
+            isinstance(
+                valor,
+                str
+            )
+
+            and
+
+            valor.startswith(
+                "http"
+            )
+
+        ):
+
+            return valor
+
+
+        if isinstance(
+            valor,
+            dict
+        ):
+
+            for chave in [
+
+                "url",
+                "download_url"
+
+            ]:
+
+                url = (
+                    valor.get(
+                        chave
+                    )
                 )
 
-                and
 
-                item.startswith(
-                    "http"
-                )
+                if (
 
-            ):
-
-                return item
-
-            if isinstance(
-                item,
-                dict
-            ):
-
-                for chave in [
-
-                    "url",
-                    "download_url"
-
-                ]:
-
-                    url = (
-                        item.get(
-                            chave
-                        )
+                    isinstance(
+                        url,
+                        str
                     )
 
-                    if (
+                    and
 
-                        isinstance(
-                            url,
-                            str
-                        )
+                    url.startswith(
+                        "http"
+                    )
 
-                        and
+                ):
 
-                        url.startswith(
-                            "http"
-                        )
+                    return url
 
-                    ):
-
-                        return url
 
     # --------------------------------------------------------
     # OUTPUT
@@ -899,6 +907,7 @@ def encontrar_download_magichour(
             "output"
         )
     )
+
 
     if isinstance(
         output,
@@ -926,6 +935,44 @@ def encontrar_download_magichour(
 
                 return valor
 
+
+            if isinstance(
+                valor,
+                dict
+            ):
+
+                for chave in [
+
+                    "url",
+                    "download_url"
+
+                ]:
+
+                    url = (
+                        valor.get(
+                            chave
+                        )
+                    )
+
+
+                    if (
+
+                        isinstance(
+                            url,
+                            str
+                        )
+
+                        and
+
+                        url.startswith(
+                            "http"
+                        )
+
+                    ):
+
+                        return url
+
+
     return None
 
 
@@ -942,12 +989,14 @@ def baixar_video_magichour(
         "video_magichour.mp4"
     )
 
+
     resposta = requests.get(
 
         url,
 
         timeout=180
     )
+
 
     if resposta.status_code != 200:
 
@@ -958,9 +1007,11 @@ def baixar_video_magichour(
 
         )
 
+
     caminho.write_bytes(
         resposta.content
     )
+
 
     return str(
         caminho
@@ -987,11 +1038,13 @@ def gerar_magichour(
 
         )
 
+
     if not prompt or not prompt.strip():
 
         raise ValueError(
             "O prompt do vídeo está vazio."
         )
+
 
     # --------------------------------------------------------
     # 1 — UPLOAD
@@ -1007,6 +1060,7 @@ def gerar_magichour(
         )
     )
 
+
     # --------------------------------------------------------
     # 2 — CRIAR PROJETO
     # --------------------------------------------------------
@@ -1021,6 +1075,7 @@ def gerar_magichour(
         )
     )
 
+
     # --------------------------------------------------------
     # 3 — PROCESSAMENTO
     # --------------------------------------------------------
@@ -1031,11 +1086,13 @@ def gerar_magichour(
         resultado
     )
 
+
     video_url = (
         encontrar_download_magichour(
             ultimo_resultado
         )
     )
+
 
     while not video_url:
 
@@ -1057,13 +1114,16 @@ def gerar_magichour(
 
             )
 
+
         time.sleep(5)
+
 
         ultimo_resultado = (
             consultar_projeto_magichour(
                 projeto_id
             )
         )
+
 
         status = str(
 
@@ -1076,6 +1136,7 @@ def gerar_magichour(
             )
 
         ).lower()
+
 
         if status in [
 
@@ -1094,11 +1155,13 @@ def gerar_magichour(
 
             )
 
+
         video_url = (
             encontrar_download_magichour(
                 ultimo_resultado
             )
         )
+
 
     # --------------------------------------------------------
     # 4 — DOWNLOAD
@@ -1109,6 +1172,7 @@ def gerar_magichour(
             video_url
         )
     )
+
 
     return {
 
@@ -1140,23 +1204,10 @@ def gerar_video_automatico(
     height=512
 ):
 
-    """
-    SISTEMA AUTOMÁTICO.
-
-    COM IMAGEM:
-
-        1º Magic Hour
-        2º LTX-2.3 Hugging Face
-
-    SEM IMAGEM:
-
-        LTX-2.3 Hugging Face
-
-    Se um motor falhar, o próximo é acionado.
-    """
-
     erros = []
 
+
+    # ========================================================
     # ========================================================
     # 🥇 PRIMEIRO MOTOR — MAGIC HOUR
     # ========================================================
@@ -1180,15 +1231,19 @@ def gerar_video_automatico(
                 )
             )
 
+
             resultado[
                 "fallback"
             ] = False
+
 
             resultado[
                 "erros_anteriores"
             ] = erros
 
+
             return resultado
+
 
         except Exception as erro:
 
@@ -1200,42 +1255,77 @@ def gerar_video_automatico(
 
             )
 
+
     # ========================================================
     # 🥈 SEGUNDO MOTOR — LTX-2.3 HUGGING FACE
-    # ====# ============================================================
+    # ========================================================
 
-        try:
+    try:
 
-        resultado = gerar_ltx_huggingface(
-            prompt=prompt,
-            duration=duracao,
-            height=height,
-            width=width,
-            imagem_bytes=imagem_bytes,
-            nome_imagem=nome_imagem,
+        resultado = (
+            gerar_ltx_huggingface(
+
+                prompt=
+                    prompt,
+
+                duration=
+                    duracao,
+
+                height=
+                    height,
+
+                width=
+                    width,
+
+                imagem_bytes=
+                    imagem_bytes,
+
+                nome_imagem=
+                    nome_imagem
+
+            )
         )
 
-        resultado["fallback"] = bool(erros)
 
-        resultado["erros_anteriores"] = erros
+        resultado[
+            "fallback"
+        ] = bool(
+            erros
+        )
+
+
+        resultado[
+            "erros_anteriores"
+        ] = erros
+
 
         return resultado
+
 
     except Exception as erro:
 
         erros.append(
+
             "LTX-2.3 Hugging Face: "
-            + str(erro)
+            +
+            str(erro)
+
         )
 
 
-# ============================================================
-# ❌ NENHUM MOTOR FUNCIONOU
-# ============================================================
+    # ========================================================
+    # ❌ NENHUM MOTOR FUNCIONOU
+    # ========================================================
 
     raise RuntimeError(
-        "❌ NENHUM MOTOR DE VÍDEO CONSEGUIU GERAR O VÍDEO.\n\n"
-        + "\n\n".join(erros)
+
+        "❌ NENHUM MOTOR DE VÍDEO "
+        "CONSEGUIU GERAR O VÍDEO.\n\n"
+        +
+        "\n\n".join(
+            erros
+        )
+
     )
 
 
@@ -1253,12 +1343,25 @@ def gerar_video(
 ):
 
     return gerar_video_automatico(
-        prompt=prompt,
-        imagem_bytes=imagem_bytes,
-        nome_imagem=nome_imagem,
-        duracao=duracao,
-        width=width,
-        height=height
+
+        prompt=
+            prompt,
+
+        imagem_bytes=
+            imagem_bytes,
+
+        nome_imagem=
+            nome_imagem,
+
+        duracao=
+            duracao,
+
+        width=
+            width,
+
+        height=
+            height
+
     )
 
 
@@ -1268,38 +1371,70 @@ def gerar_video(
 
 def mostrar_configuracao_video():
 
-    st.subheader("🎬 Configuração de Vídeo")
+    st.subheader(
+        "🎬 Configuração de Vídeo"
+    )
+
 
     camera_video = st.selectbox(
+
         "📷 Câmera",
+
         CAMERAS,
+
         index=0
+
     )
+
 
     proporcao_video = st.selectbox(
+
         "📐 Proporção",
+
         PROPORCOES,
+
         index=1
+
     )
+
 
     duracao_video = st.number_input(
+
         "⏱️ Duração do vídeo (segundos)",
+
         min_value=1,
+
         max_value=60,
+
         value=DURACAO_PADRAO,
+
         step=1
+
     )
 
-    st.write("**🎥 Motores disponíveis:**")
+
+    st.write(
+        "**🎥 Motores disponíveis:**"
+    )
+
 
     for motor in MOTORES_VIDEO:
-        st.write(f"• {motor}")
+
+        st.write(
+            f"• {motor}"
+        )
+
 
     return (
+
         camera_video,
+
         proporcao_video,
+
         duracao_video
+
     )
+
 
 # ============================================================
 # 🎬 TEXTO → VÍDEO
@@ -1311,8 +1446,13 @@ def gerar_video_texto(
 ):
 
     return gerar_ltx_huggingface(
-        prompt=prompt,
-        duration=duracao
+
+        prompt=
+            prompt,
+
+        duration=
+            duracao
+
     )
 
 
@@ -1326,8 +1466,15 @@ def gerar_video_imagem(
     prompt
 ):
 
-    return gerar_magichour(
-        imagem_bytes=imagem_bytes,
-        nome_arquivo=nome_imagem,
-        prompt=prompt
-)
+    return gerar_video(
+
+        prompt=
+            prompt,
+
+        imagem_bytes=
+            imagem_bytes,
+
+        nome_imagem=
+            nome_imagem
+
+    )
