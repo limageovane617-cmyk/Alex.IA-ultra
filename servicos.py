@@ -61,9 +61,15 @@ def verificar_servicos():
     estão configuradas.
     """
 
-    resultado = {
+        resultado = {
         "gemini": bool(obter_chave_gemini()),
-        "huggingface": bool(obter_token_huggingface())
+        "huggingface": bool(obter_token_huggingface()),
+        "magic_hour": bool(
+            st.secrets.get(
+                "MAGIC_HOUR_API_KEY",
+                ""
+            )
+        )
     }
 
     return resultado
