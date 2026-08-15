@@ -1,54 +1,39 @@
-"""
-============================================================
-ALEX IA ULTRA
-GERENCIADOR DE VÍDEO
-============================================================
-
-Sistema completo de:
-
-- múltiplos motores;
-- fallback automático;
-- detecção de quota;
-- bloqueio temporário;
-- reativação automática;
-- tratamento de erros;
-- confirmação de vídeo real;
-- geração de clipes;
-- suporte a diferentes câmeras.
-
-============================================================
-"""
+# ============================================================
+# 🎬 ALEX IA ULTRA — GERENCIADOR DE VÍDEO
+# Fallback + quota + reativação automática
+# Compatível com app.py / servicos.py
+# ============================================================
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Callable, Optional
+import io
 import time
-import threading
+import uuid
+from pathlib import Path
 
+import streamlit as st
+from google.genai import types
 
-# ============================================================
-# CONFIGURAÇÕES GERAIS
-# ============================================================
-
-PASTA_VIDEOS = Path("videos_gerados")
-
-PASTA_VIDEOS.mkdir(
-    parents=True,
-    exist_ok=True
+from servicos import (
+    criar_cliente_gemini,
+    criar_cliente_huggingface,
 )
 
 
-# Duração padrão dos vídeos
+# ============================================================
+# CONFIGURAÇÕES
+# ============================================================
+
+PASTA_VIDEOS = Path("videos_gerados")
+PASTA_VIDEOS.mkdir(parents=True, exist_ok=True)
+
 DURACAO_PADRAO = 8
 
-
-# Tempo que um motor ficará bloqueado
-# depois de atingir quota.
-#
-# 30 minutos = 1800 segundos
+# Tempo de bloqueio quando um motor atinge quota.
+# 1800 segundos = 30 minutos.
 TEMPO_REATIVACAO_QUOTA = 1800
+
+MODELO_VEO = "veo-3.1-generate-preview"
 
 
 # ============================================================
@@ -56,15 +41,10 @@ TEMPO_REATIVACAO_QUOTA = 1800
 # ============================================================
 
 CAMERAS = [
-
     "Sony FX5",
-
     "Sony FX6",
-
     "Canon EOS C80",
-
     "ARRI Alexa Mini LF",
-
 ]
 
 
@@ -73,274 +53,106 @@ CAMERAS = [
 # ============================================================
 
 PROPORCOES = [
-
     "16:9",
-
     "9:16",
-
     "1:1",
-
 ]
 
 
 # ============================================================
-# ESTRUTURAS
+# ESTADO DOS MOTORES
 # ============================================================
 
-@dataclass
-class ResultadoVideo:
+def _estado_motores():
 
-    sucesso: bool
+    if "video_motores" not in st.session_state:
 
-    motor: str
+        st.session_state.video_motores = {
 
-    arquivo: Optional[str] = None
+            "Veo 3.1": {
+                "ativo": True,
+                "bloqueado_ate": 0.0,
+                "erros": 0,
+                "sucessos": 0,
+                "ultimo_erro": "",
+            },
 
-    mensagem: str = ""
+            "Hugging Face": {
+                "ativo": True,
+                "bloqueado_ate": 0.0,
+                "erros": 0,
+                "sucessos": 0,
+                "ultimo_erro": "",
+            },
 
-    erro: Optional[str] = None
+        }
 
-
-@dataclass
-class MotorVideo:
-
-    nome: str
-
-    funcao: Callable[..., Any]
-
-    ativo: bool = True
-
-    bloqueado_ate: float = 0.0
-
-    ultimo_erro: Optional[str] = None
-
-    quantidade_erros: int = 0
-
-    quantidade_sucessos: int = 0
-
-    quota_atingida: bool = False
+    return st.session_state.video_motores
 
 
 # ============================================================
-# LISTA DE MOTORES
+# REATIVAÇÃO AUTOMÁTICA
 # ============================================================
 
-MOTORES: list[MotorVideo] = []
+def _reativar_motores_expirados():
 
+    agora = time.time()
 
-# ============================================================
-# LOCK
-# ============================================================
+    motores = _estado_motores()
 
-LOCK_MOTORES = threading.Lock()
+    for dados in motores.values():
 
+        if (
+            dados["bloqueado_ate"] > 0
+            and dados["bloqueado_ate"] <= agora
+        ):
 
-# ============================================================
-# REGISTRAR MOTOR
-# ============================================================
+            dados["bloqueado_ate"] = 0.0
+            dados["ultimo_erro"] = ""
 
-def registrar_motor(
-    nome: str,
-    funcao: Callable[..., Any],
-    ativo: bool = True,
-) -> None:
-
-    """
-    Adiciona um motor ao sistema.
-
-    Exemplo:
-
-        registrar_motor(
-            "Veo",
-            minha_funcao_veo
-        )
-    """
-
-    if not nome:
-
-        raise ValueError(
-            "O nome do motor não pode estar vazio."
-        )
-
-
-    with LOCK_MOTORES:
-
-        # Verifica se já existe
-
-        for motor in MOTORES:
-
-            if motor.nome.lower() == nome.lower():
-
-                motor.funcao = funcao
-
-                motor.ativo = ativo
-
-                return
-
-
-        # Cria novo motor
-
-        novo_motor = MotorVideo(
-
-            nome=nome,
-
-            funcao=funcao,
-
-            ativo=ativo,
-
-        )
-
-
-        MOTORES.append(
-            novo_motor
-        )
+            print(
+                "[VIDEO] ♻️ Motor "
+                "reativado automaticamente."
+            )
 
 
 # ============================================================
-# REMOVER MOTOR
+# MOTOR DISPONÍVEL
 # ============================================================
 
-def remover_motor(
-    nome: str
-) -> bool:
+def _motor_disponivel(nome):
 
-    global MOTORES
+    motores = _estado_motores()
 
+    dados = motores[nome]
 
-    with LOCK_MOTORES:
+    if not dados["ativo"]:
+        return False
 
-        quantidade_antes = len(
-            MOTORES
-        )
-
-
-        MOTORES = [
-
-            motor
-
-            for motor in MOTORES
-
-            if motor.nome.lower()
-            != nome.lower()
-
-        ]
-
-
-        return (
-            len(MOTORES)
-            < quantidade_antes
-        )
-
-
-# ============================================================
-# ATIVAR MOTOR
-# ============================================================
-
-def ativar_motor(
-    nome: str
-) -> bool:
-
-    with LOCK_MOTORES:
-
-        for motor in MOTORES:
-
-            if motor.nome.lower() == nome.lower():
-
-                motor.ativo = True
-
-                motor.bloqueado_ate = 0
-
-                motor.quota_atingida = False
-
-                return True
-
-
-    return False
-
-
-# ============================================================
-# DESATIVAR MOTOR
-# ============================================================
-
-def desativar_motor(
-    nome: str
-) -> bool:
-
-    with LOCK_MOTORES:
-
-        for motor in MOTORES:
-
-            if motor.nome.lower() == nome.lower():
-
-                motor.ativo = False
-
-                return True
-
-
-    return False
-
-
-# ============================================================
-# LISTAR MOTORES
-# ============================================================
-
-def listar_motores() -> list[str]:
-
-    reativar_motores_expirados()
-
-
-    with LOCK_MOTORES:
-
-        return [
-
-            motor.nome
-
-            for motor in MOTORES
-
-            if motor.ativo
-
-            and motor.bloqueado_ate
-            <= time.time()
-
-        ]
+    return time.time() >= dados["bloqueado_ate"]
 
 
 # ============================================================
 # DETECTAR QUOTA
 # ============================================================
 
-def erro_e_quota(
-    erro: Exception | str
-) -> bool:
-
-    """
-    Detecta erros comuns de quota.
-
-    Exemplos:
-
-    429
-    RESOURCE_EXHAUSTED
-    quota
-    rate limit
-    too many requests
-    """
+def _erro_e_quota(erro):
 
     texto = str(erro).lower()
 
-
-    palavras = [
+    sinais = [
 
         "429",
 
         "quota",
 
-        "rate limit",
-
-        "rate_limit",
-
         "resource_exhausted",
 
         "resource exhausted",
+
+        "rate limit",
+
+        "rate_limit",
 
         "too many requests",
 
@@ -350,349 +162,164 @@ def erro_e_quota(
 
         "usage limit",
 
-        "capacity",
-
-        "exceeded",
+        "capacity exceeded",
 
     ]
 
-
-    for palavra in palavras:
-
-        if palavra in texto:
-
-            return True
-
-
-    return False
+    return any(
+        sinal in texto
+        for sinal in sinais
+    )
 
 
 # ============================================================
 # BLOQUEAR MOTOR
 # ============================================================
 
-def bloquear_por_quota(
-    motor: MotorVideo,
-    erro: Exception | str,
-) -> None:
+def _bloquear_por_quota(
+    nome,
+    erro,
+):
 
-    agora = time.time()
+    dados = _estado_motores()[nome]
 
-
-    motor.quota_atingida = True
-
-    motor.ultimo_erro = str(
-        erro
-    )
-
-    motor.quantidade_erros += 1
-
-
-    motor.bloqueado_ate = (
-        agora
+    dados["bloqueado_ate"] = (
+        time.time()
         + TEMPO_REATIVACAO_QUOTA
     )
 
+    dados["ultimo_erro"] = str(erro)
+
+    dados["erros"] += 1
 
     print(
-        "[VIDEO] ⚠️ QUOTA ATINGIDA"
+        f"[VIDEO] ⚠️ {nome} "
+        "atingiu quota."
     )
 
-
     print(
-        f"[VIDEO] Motor: {motor.nome}"
-    )
-
-
-    print(
-        f"[VIDEO] Bloqueado por "
+        f"[VIDEO] ⏱️ Bloqueado por "
         f"{TEMPO_REATIVACAO_QUOTA} segundos."
     )
 
 
 # ============================================================
-# REGISTRAR ERRO NORMAL
+# ERRO NORMAL
 # ============================================================
 
-def registrar_erro(
-    motor: MotorVideo,
-    erro: Exception | str,
-) -> None:
+def _registrar_erro(
+    nome,
+    erro,
+):
 
-    motor.ultimo_erro = str(
-        erro
+    dados = _estado_motores()[nome]
+
+    dados["ultimo_erro"] = str(erro)
+
+    dados["erros"] += 1
+
+
+# ============================================================
+# SUCESSO
+# ============================================================
+
+def _registrar_sucesso(
+    nome,
+):
+
+    dados = _estado_motores()[nome]
+
+    dados["bloqueado_ate"] = 0.0
+
+    dados["ultimo_erro"] = ""
+
+    dados["sucessos"] += 1
+
+
+# ============================================================
+# CONFIGURAÇÃO DO VÍDEO
+# ============================================================
+
+def mostrar_configuracao_video():
+
+    camera = st.selectbox(
+        "📷 Câmera",
+        CAMERAS,
+        index=1,
+        key="video_camera_config",
     )
 
-    motor.quantidade_erros += 1
+    proporcao = st.selectbox(
+        "📐 Proporção",
+        PROPORCOES,
+        index=0,
+        key="video_proporcao_config",
+    )
+
+    duracao = st.selectbox(
+        "⏱️ Duração",
+        [8],
+        index=0,
+        key="video_duracao_config",
+        help=(
+            "Os clipes deste sistema "
+            "usam 8 segundos."
+        ),
+    )
+
+    return (
+        camera,
+        proporcao,
+        duracao,
+    )
 
 
 # ============================================================
-# REGISTRAR SUCESSO
+# MAGIC HOUR
 # ============================================================
 
-def registrar_sucesso(
-    motor: MotorVideo
-) -> None:
-
-    motor.quantidade_sucessos += 1
-
-    motor.ultimo_erro = None
-
-    motor.quota_atingida = False
-
-    motor.bloqueado_ate = 0
-
-
-# ============================================================
-# MOTOR DISPONÍVEL?
-# ============================================================
-
-def motor_esta_disponivel(
-    motor: MotorVideo
-) -> bool:
-
-    if not motor.ativo:
-
-        return False
-
-
-    agora = time.time()
-
-
-    # Ainda está bloqueado
-
-    if (
-        motor.bloqueado_ate
-        > agora
-    ):
-
-        return False
-
-
-    return True
-
-
-# ============================================================
-# REATIVAÇÃO AUTOMÁTICA
-# ============================================================
-
-def reativar_motores_expirados() -> None:
-
-    agora = time.time()
-
-
-    with LOCK_MOTORES:
-
-        for motor in MOTORES:
-
-            if not motor.ativo:
-
-                continue
-
-
-            if (
-                motor.bloqueado_ate > 0
-                and motor.bloqueado_ate
-                <= agora
-            ):
-
-                motor.bloqueado_ate = 0
-
-                motor.quota_atingida = False
-
-                motor.ultimo_erro = None
-
-
-                print(
-                    "[VIDEO] ♻️ Motor "
-                    f"{motor.nome} "
-                    "reativado automaticamente."
-                )
-
-
-# ============================================================
-# TEMPO RESTANTE
-# ============================================================
-
-def tempo_bloqueio(
-    nome: str
-) -> int:
-
-    agora = time.time()
-
-
-    with LOCK_MOTORES:
-
-        for motor in MOTORES:
-
-            if motor.nome.lower()
-            == nome.lower():
-
-                restante = (
-                    motor.bloqueado_ate
-                    - agora
-                )
-
-
-                if restante <= 0:
-
-                    return 0
-
-
-                return int(
-                    restante
-                )
-
-
-    return 0
-
-
-# ============================================================
-# LIMPAR ESTADO DE UM MOTOR
-# ============================================================
-
-def resetar_motor(
-    nome: str
-) -> bool:
-
-    with LOCK_MOTORES:
-
-        for motor in MOTORES:
-
-            if motor.nome.lower()
-            == nome.lower():
-
-                motor.bloqueado_ate = 0
-
-                motor.quota_atingida = False
-
-                motor.ultimo_erro = None
-
-                motor.quantidade_erros = 0
-
-                return True
-
-
-    return False
-
-
-# ============================================================
-# VALIDAR CÂMERA
-# ============================================================
-
-def validar_camera(
-    camera: str
-) -> str:
-
-    if camera in CAMERAS:
-
-        return camera
-
-
-    return "Sony FX6"
-
-
-# ============================================================
-# VALIDAR PROPORÇÃO
-# ============================================================
-
-def validar_proporcao(
-    proporcao: str
-) -> str:
-
-    if proporcao in PROPORCOES:
-
-        return proporcao
-
-
-    return "16:9"
-
-
-# ============================================================
-# VALIDAR DURAÇÃO
-# ============================================================
-
-def validar_duracao(
-    duracao: Any
-) -> int:
-
-    try:
-
-        duracao = int(
-            duracao
+def verificar_magic_hour(
+    *args,
+    **kwargs,
+):
+
+    return bool(
+        kwargs.get(
+            "ativo",
+            False,
         )
-
-    except Exception:
-
-        duracao = DURACAO_PADRAO
-
-
-    if duracao <= 0:
-
-        duracao = DURACAO_PADRAO
-
-
-    return duracao
-
-
-# ============================================================
-# MONTAR PROMPT
-# ============================================================
-
-def montar_prompt(
-    descricao: str,
-    camera: str = "Sony FX6",
-    proporcao: str = "16:9",
-    duracao: int = 8,
-) -> str:
-
-    descricao = str(
-        descricao
-    ).strip()
-
-
-    if not descricao:
-
-        raise ValueError(
-            "A descrição do vídeo "
-            "não pode estar vazia."
+        or kwargs.get(
+            "magic_hour",
+            False,
         )
-
-
-    camera = validar_camera(
-        camera
     )
 
 
-    proporcao = validar_proporcao(
-        proporcao
-    )
+# ============================================================
+# PROMPT CINEMATOGRÁFICO
+# ============================================================
 
-
-    duracao = validar_duracao(
-        duracao
-    )
-
+def _montar_prompt(
+    prompt,
+    camera,
+    proporcao,
+):
 
     return f"""
 Crie um vídeo cinematográfico
-realista e de alta qualidade.
+realista e fotorealista.
 
 CENA:
 
-{descricao}
+{prompt}
 
 CÂMERA:
 
 {camera}
 
-PROPORÇÃO:
+FORMATO:
 
 {proporcao}
-
-DURAÇÃO:
-
-{duracao} segundos
 
 DIREÇÃO CINEMATOGRÁFICA:
 
@@ -701,35 +328,31 @@ DIREÇÃO CINEMATOGRÁFICA:
 - câmera estável;
 - profundidade cinematográfica;
 - física natural;
-- continuidade visual;
+- continuidade temporal;
 - personagens consistentes;
 - ambiente consistente;
-- detalhes realistas;
-- sem deformações;
-- sem mudanças desnecessárias
-  na aparência dos personagens.
-
-A câmera deve permanecer
-consistente durante toda a cena.
+- preservar rosto e identidade;
+- preservar roupa e aparência;
+- não criar personagens extras sem necessidade;
+- evitar deformações;
+- evitar mudanças repentinas de aparência;
+- manter a câmera consistente durante o clipe.
 """.strip()
 
 
 # ============================================================
-# GERAR NOME
+# NOMES DE ARQUIVOS
 # ============================================================
 
-def gerar_nome_arquivo(
-    prefixo: str = "video"
-) -> str:
-
-    timestamp = int(
-        time.time() * 1000
-    )
-
+def _novo_arquivo(
+    prefixo="video",
+):
 
     return (
-        f"{prefixo}_"
-        f"{timestamp}.mp4"
+        PASTA_VIDEOS
+        / f"{prefixo}_"
+        f"{uuid.uuid4().hex[:12]}"
+        ".mp4"
     )
 
 
@@ -737,10 +360,10 @@ def gerar_nome_arquivo(
 # SALVAR BYTES
 # ============================================================
 
-def salvar_bytes(
-    dados: bytes,
-    nome_arquivo: Optional[str] = None,
-) -> str:
+def _salvar_bytes(
+    dados,
+    caminho=None,
+):
 
     if not dados:
 
@@ -749,56 +372,393 @@ def salvar_bytes(
             "dados vazios."
         )
 
-
-    if not nome_arquivo:
-
-        nome_arquivo = gerar_nome_arquivo()
-
-
-    nome_arquivo = Path(
-        nome_arquivo
-    ).name
-
-
-    if not nome_arquivo.lower().endswith(
-        ".mp4"
-    ):
-
-        nome_arquivo += ".mp4"
-
-
     caminho = (
-        PASTA_VIDEOS
-        / nome_arquivo
+        caminho
+        or _novo_arquivo()
     )
-
 
     caminho.write_bytes(
         dados
     )
 
-
-    if not caminho.exists():
+    if (
+        not caminho.exists()
+        or caminho.stat().st_size <= 0
+    ):
 
         raise RuntimeError(
-            "O arquivo não foi criado."
+            "O arquivo de vídeo "
+            "ficou vazio."
+        )
+
+    return str(caminho)
+
+
+# ============================================================
+# EXTRAIR RESPOSTA DE VÍDEO
+# ============================================================
+
+def _salvar_resposta(
+    resposta,
+    caminho=None,
+):
+
+    if resposta is None:
+
+        raise RuntimeError(
+            "Resposta vazia."
         )
 
 
-    if caminho.stat().st_size <= 0:
+    # bytes
+
+    if isinstance(
+        resposta,
+        bytes,
+    ):
+
+        return _salvar_bytes(
+            resposta,
+            caminho,
+        )
+
+
+    # bytearray
+
+    if isinstance(
+        resposta,
+        bytearray,
+    ):
+
+        return _salvar_bytes(
+            bytes(resposta),
+            caminho,
+        )
+
+
+    # caminho de arquivo
+
+    if isinstance(
+        resposta,
+        (str, Path),
+    ):
+
+        origem = Path(
+            resposta
+        )
+
+        if origem.exists():
+
+            destino = (
+                caminho
+                or (
+                    PASTA_VIDEOS
+                    / origem.name
+                )
+            )
+
+            destino.write_bytes(
+                origem.read_bytes()
+            )
+
+            if destino.stat().st_size <= 0:
+
+                raise RuntimeError(
+                    "Arquivo vazio."
+                )
+
+            return str(
+                destino
+            )
+
+
+    # dicionário
+
+    if isinstance(
+        resposta,
+        dict,
+    ):
+
+        chaves = [
+
+            "video",
+            "video_bytes",
+            "bytes",
+            "content",
+            "data",
+            "output",
+            "path",
+            "file",
+
+        ]
+
+        for chave in chaves:
+
+            if chave not in resposta:
+                continue
+
+            valor = resposta[
+                chave
+            ]
+
+            if valor is None:
+                continue
+
+            try:
+
+                return _salvar_resposta(
+                    valor,
+                    caminho,
+                )
+
+            except Exception:
+                pass
+
+
+    # objeto de SDK
+
+    atributos = [
+
+        "video",
+        "video_bytes",
+        "bytes",
+        "content",
+        "data",
+        "output",
+        "path",
+        "file",
+
+    ]
+
+    for atributo in atributos:
 
         try:
 
-            caminho.unlink()
+            valor = getattr(
+                resposta,
+                atributo,
+                None,
+            )
 
         except Exception:
 
+            valor = None
+
+        if valor is None:
+            continue
+
+        try:
+
+            return _salvar_resposta(
+                valor,
+                caminho,
+            )
+
+        except Exception:
             pass
 
 
+    # read()
+
+    if hasattr(
+        resposta,
+        "read",
+    ):
+
+        try:
+
+            dados = resposta.read()
+
+            if dados:
+
+                return _salvar_bytes(
+                    dados,
+                    caminho,
+                )
+
+        except Exception:
+            pass
+
+
+    raise RuntimeError(
+        "Não foi possível "
+        "extrair um arquivo "
+        "de vídeo válido."
+    )
+
+
+# ============================================================
+# MOTOR VEO
+# ============================================================
+
+def _gerar_veo(
+    prompt,
+    imagem_bytes=None,
+    proporcao="16:9",
+    duracao=8,
+):
+
+    cliente = (
+        criar_cliente_gemini()
+    )
+
+    if cliente is None:
+
         raise RuntimeError(
-            "O arquivo foi criado "
-            "vazio."
+            "GEMINI_API_KEY "
+            "não está configurada."
+        )
+
+
+    if int(duracao) != 8:
+
+        raise RuntimeError(
+            "O Veo configurado "
+            "neste projeto usa "
+            "clipes de 8 segundos."
+        )
+
+
+    aspect_ratio = (
+        "9:16"
+        if proporcao == "9:16"
+        else "16:9"
+    )
+
+
+    configuracao = (
+        types.GenerateVideosConfig(
+            aspect_ratio=aspect_ratio,
+            resolution="720p",
+        )
+    )
+
+
+    parametros = {
+
+        "model": MODELO_VEO,
+
+        "prompt": prompt,
+
+        "config": configuracao,
+
+    }
+
+
+    # Imagem inicial opcional
+
+    if imagem_bytes:
+
+        try:
+
+            from PIL import Image
+
+            imagem = Image.open(
+                io.BytesIO(
+                    imagem_bytes
+                )
+            )
+
+            parametros[
+                "image"
+            ] = imagem
+
+        except Exception as erro:
+
+            raise RuntimeError(
+                "Não foi possível "
+                "preparar a imagem "
+                "de referência: "
+                f"{erro}"
+            )
+
+
+    operacao = (
+        cliente.models.generate_videos(
+            **parametros
+        )
+    )
+
+
+    while not operacao.done:
+
+        time.sleep(10)
+
+        operacao = (
+            cliente.operations.get(
+                operacao
+            )
+        )
+
+
+    erro_operacao = getattr(
+        operacao,
+        "error",
+        None,
+    )
+
+    if erro_operacao:
+
+        raise RuntimeError(
+            str(erro_operacao)
+        )
+
+
+    resposta = getattr(
+        operacao,
+        "response",
+        None,
+    )
+
+
+    videos = (
+        getattr(
+            resposta,
+            "generated_videos",
+            None,
+        )
+        if resposta
+        else None
+    )
+
+
+    if not videos:
+
+        raise RuntimeError(
+            "O Veo terminou, "
+            "mas não retornou "
+            "nenhum vídeo."
+        )
+
+
+    video = videos[0]
+
+
+    caminho = _novo_arquivo(
+        "veo"
+    )
+
+
+    # Download pelo cliente Gemini
+
+    cliente.files.download(
+        file=video.video
+    )
+
+
+    video.video.save(
+        str(caminho)
+    )
+
+
+    if (
+        not caminho.exists()
+        or caminho.stat().st_size <= 0
+    ):
+
+        raise RuntimeError(
+            "O Veo não produziu "
+            "um arquivo válido."
         )
 
 
@@ -808,515 +768,213 @@ def salvar_bytes(
 
 
 # ============================================================
-# COPIAR VÍDEO
+# MOTOR HUGGING FACE
 # ============================================================
 
-def copiar_video(
-    origem: str | Path,
-    nome_arquivo: Optional[str] = None,
-) -> str:
+def _gerar_huggingface(
+    prompt,
+    duracao=8,
+):
 
-    origem = Path(
-        origem
+    cliente = (
+        criar_cliente_huggingface()
     )
 
-
-    if not origem.exists():
-
-        raise FileNotFoundError(
-            f"Arquivo não encontrado: "
-            f"{origem}"
-        )
-
-
-    if origem.stat().st_size <= 0:
+    if cliente is None:
 
         raise RuntimeError(
-            "O vídeo de origem "
-            "está vazio."
+            "HF_TOKEN "
+            "não está configurado."
         )
 
 
-    if not nome_arquivo:
-
-        nome_arquivo = origem.name
-
-
-    nome_arquivo = Path(
-        nome_arquivo
-    ).name
-
-
-    destino = (
-        PASTA_VIDEOS
-        / nome_arquivo
+    modelo = (
+        "Lightricks/"
+        "LTX-Video-0.9.8-13B-distilled"
     )
 
 
-    destino.write_bytes(
-        origem.read_bytes()
+    resultado = (
+        cliente.text_to_video(
+            prompt,
+            model=modelo,
+        )
     )
 
 
-    return str(
-        destino
+    return _salvar_resposta(
+        resultado,
+        _novo_arquivo(
+            "huggingface"
+        ),
     )
 
 
 # ============================================================
-# EXTRAIR VÍDEO
-# ============================================================
-
-def extrair_video(
-    resposta: Any,
-    nome_arquivo: Optional[str] = None,
-) -> str:
-
-    """
-    Tenta extrair o vídeo de
-    diferentes formatos de resposta.
-    """
-
-    if resposta is None:
-
-        raise RuntimeError(
-            "Resposta vazia."
-        )
-
-
-    # Bytes
-
-    if isinstance(
-        resposta,
-        bytes
-    ):
-
-        return salvar_bytes(
-            resposta,
-            nome_arquivo
-        )
-
-
-    if isinstance(
-        resposta,
-        bytearray
-    ):
-
-        return salvar_bytes(
-            bytes(resposta),
-            nome_arquivo
-        )
-
-
-    # Caminho
-
-    if isinstance(
-        resposta,
-        (str, Path)
-    ):
-
-        caminho = Path(
-            resposta
-        )
-
-
-        if caminho.exists():
-
-            return copiar_video(
-                caminho,
-                nome_arquivo
-            )
-
-
-    # Dicionário
-
-    if isinstance(
-        resposta,
-        dict
-    ):
-
-        chaves = [
-
-            "video",
-
-            "video_bytes",
-
-            "bytes",
-
-            "content",
-
-            "data",
-
-            "file",
-
-            "output",
-
-            "path",
-
-            "filename",
-
-        ]
-
-
-        for chave in chaves:
-
-            if chave not in resposta:
-
-                continue
-
-
-            valor = resposta[
-                chave
-            ]
-
-
-            if valor is None:
-
-                continue
-
-
-            try:
-
-                return extrair_video(
-                    valor,
-                    nome_arquivo
-                )
-
-            except Exception:
-
-                continue
-
-
-    # Objeto de SDK
-
-    atributos = [
-
-        "video",
-
-        "video_bytes",
-
-        "bytes",
-
-        "content",
-
-        "data",
-
-        "file",
-
-        "output",
-
-        "path",
-
-        "filename",
-
-    ]
-
-
-    for atributo in atributos:
-
-        try:
-
-            valor = getattr(
-                resposta,
-                atributo,
-                None
-            )
-
-        except Exception:
-
-            valor = None
-
-
-        if valor is None:
-
-            continue
-
-
-        try:
-
-            return extrair_video(
-                valor,
-                nome_arquivo
-            )
-
-        except Exception:
-
-            continue
-
-
-    # read()
-
-    if hasattr(
-        resposta,
-        "read"
-    ):
-
-        try:
-
-            dados = resposta.read()
-
-
-            if dados:
-
-                return salvar_bytes(
-                    dados,
-                    nome_arquivo
-                )
-
-        except Exception:
-
-            pass
-
-
-    raise RuntimeError(
-        "O motor respondeu, "
-        "mas não entregou um "
-        "arquivo de vídeo válido."
-    )
-
-
-# ============================================================
-# GERAR VÍDEO
+# GERADOR PRINCIPAL
 # ============================================================
 
 def gerar_video(
-    descricao: str,
-    camera: str = "Sony FX6",
-    proporcao: str = "16:9",
-    duracao: int = DURACAO_PADRAO,
-    nome_arquivo: Optional[str] = None,
-) -> ResultadoVideo:
+    prompt=None,
+    imagem_bytes=None,
+    nome_imagem="imagem.png",
+    duracao=DURACAO_PADRAO,
+    width=1536,
+    height=1024,
+    camera="Sony FX6",
+    proporcao="16:9",
+    descricao=None,
+    nome_arquivo=None,
+    **kwargs,
+):
 
-    """
-    GERADOR PRINCIPAL.
-
-    O sistema:
-
-    1. prepara o prompt;
-    2. verifica os motores;
-    3. pula motores bloqueados;
-    4. tenta o primeiro disponível;
-    5. detecta quota;
-    6. bloqueia o motor;
-    7. ativa fallback;
-    8. tenta o próximo;
-    9. confirma o arquivo;
-    10. retorna sucesso.
-
-    """
-
-    reativar_motores_expirados()
+    _reativar_motores_expirados()
 
 
-    try:
+    texto = (
+        prompt
+        or descricao
+        or ""
+    ).strip()
 
-        prompt = montar_prompt(
-            descricao,
+
+    if not texto:
+
+        raise ValueError(
+            "Digite uma descrição "
+            "para o vídeo."
+        )
+
+
+    prompt_final = (
+        _montar_prompt(
+            texto,
             camera,
             proporcao,
-            duracao
         )
+    )
 
-    except Exception as erro:
 
-        return ResultadoVideo(
+    # ========================================================
+    # ORDEM DO FALLBACK
+    # ========================================================
 
-            sucesso=False,
+    motores = [
 
-            motor="nenhum",
+        (
+            "Veo 3.1",
 
-            mensagem=(
-                "Não foi possível "
-                "preparar o vídeo."
+            lambda: _gerar_veo(
+                prompt_final,
+                imagem_bytes,
+                proporcao,
+                duracao,
             ),
+        ),
 
-            erro=str(erro),
+        (
+            "Hugging Face",
 
-        )
-
-
-    if not nome_arquivo:
-
-        nome_arquivo = (
-            gerar_nome_arquivo()
-        )
-
-
-    # Apenas motores disponíveis
-
-    motores_disponiveis = [
-
-        motor
-
-        for motor in MOTORES
-
-        if motor_esta_disponivel(
-            motor
-        )
+            lambda: _gerar_huggingface(
+                prompt_final,
+                duracao,
+            ),
+        ),
 
     ]
-
-
-    if not motores_disponiveis:
-
-        bloqueados = []
-
-
-        for motor in MOTORES:
-
-            if motor.ativo:
-
-                restante = tempo_bloqueio(
-                    motor.nome
-                )
-
-
-                if restante > 0:
-
-                    bloqueados.append(
-                        f"{motor.nome}: "
-                        f"{restante}s"
-                    )
-
-
-        detalhe = (
-            ", ".join(
-                bloqueados
-            )
-            if bloqueados
-            else "nenhum motor configurado"
-        )
-
-
-        return ResultadoVideo(
-
-            sucesso=False,
-
-            motor="nenhum",
-
-            mensagem=(
-                "❌ Nenhum motor de vídeo "
-                "está disponível no momento."
-            ),
-
-            erro=detalhe,
-
-        )
 
 
     erros = []
 
 
     # ========================================================
-    # FALLBACK
+    # TENTATIVAS
     # ========================================================
 
-    for indice, motor in enumerate(
-        motores_disponiveis,
-        start=1
-    ):
+    for nome, funcao in motores:
+
+        if not _motor_disponivel(
+            nome
+        ):
+
+            restante = (
+                _estado_motores()
+                [nome]
+                ["bloqueado_ate"]
+                - time.time()
+            )
+
+            if restante > 0:
+
+                print(
+                    f"[VIDEO] ⏸️ "
+                    f"{nome} bloqueado "
+                    f"por aproximadamente "
+                    f"{int(restante)} segundos."
+                )
+
+            continue
+
 
         print(
-            ""
-        )
-
-        print(
-            "================================"
-        )
-
-        print(
-            f"[VIDEO] MOTOR "
-            f"{indice}/"
-            f"{len(motores_disponiveis)}"
-        )
-
-        print(
-            f"[VIDEO] {motor.nome}"
-        )
-
-        print(
-            "================================"
+            f"[VIDEO] 🎬 "
+            f"Tentando motor: {nome}"
         )
 
 
         try:
 
-            resposta = motor.funcao(
-
-                prompt=prompt,
-
-                duracao=duracao,
-
-                proporcao=proporcao,
-
-                camera=camera,
-
-            )
-
-
-            arquivo = extrair_video(
-
-                resposta,
-
-                nome_arquivo
-
-            )
+            caminho = funcao()
 
 
             caminho = Path(
-                arquivo
+                caminho
             )
 
 
-            # Confirmação real
-
-            if not caminho.exists():
+            if (
+                not caminho.exists()
+                or caminho.stat().st_size <= 0
+            ):
 
                 raise RuntimeError(
-                    "O arquivo retornado "
-                    "não existe."
+                    "O motor não "
+                    "retornou um vídeo "
+                    "válido."
                 )
 
 
-            if caminho.stat().st_size <= 0:
-
-                raise RuntimeError(
-                    "O arquivo retornado "
-                    "está vazio."
-                )
-
-
-            # Sucesso
-
-            registrar_sucesso(
-                motor
+            _registrar_sucesso(
+                nome
             )
 
 
             print(
                 f"[VIDEO] ✅ "
-                f"VÍDEO GERADO POR "
-                f"{motor.nome}"
+                f"Vídeo gerado por "
+                f"{nome}"
             )
 
 
-            return ResultadoVideo(
+            return {
 
-                sucesso=True,
+                "video":
+                    str(caminho),
 
-                motor=motor.nome,
+                "motor":
+                    nome,
 
-                arquivo=str(
-                    caminho
-                ),
+                "sucesso":
+                    True,
 
-                mensagem=(
+                "mensagem":
                     f"Vídeo gerado "
-                    f"com sucesso pelo "
-                    f"{motor.nome}."
-                ),
+                    f"com {nome}.",
 
-            )
+                "erros":
+                    erros,
+
+            }
 
 
         except Exception as erro:
@@ -1327,22 +985,29 @@ def gerar_video(
 
 
             erros.append(
-                f"{motor.nome}: "
+                f"{nome}: "
                 f"{texto_erro}"
             )
 
 
-            # =================================================
-            # QUOTA
-            # =================================================
+            print(
+                f"[VIDEO] ❌ "
+                f"{nome}: "
+                f"{texto_erro}"
+            )
 
-            if erro_e_quota(
+
+            # ================================================
+            # QUOTA
+            # ================================================
+
+            if _erro_e_quota(
                 erro
             ):
 
-                bloquear_por_quota(
-                    motor,
-                    erro
+                _bloquear_por_quota(
+                    nome,
+                    erro,
                 )
 
 
@@ -1352,213 +1017,109 @@ def gerar_video(
                 )
 
 
-                continue
+            else:
+
+                _registrar_erro(
+                    nome,
+                    erro,
+                )
 
 
-            # =================================================
-            # ERRO NORMAL
-            # =================================================
-
-            registrar_erro(
-                motor,
-                erro
-            )
-
-
-            print(
-                f"[VIDEO] ❌ "
-                f"Erro em "
-                f"{motor.nome}: "
-                f"{texto_erro}"
-            )
-
-
-            print(
-                "[VIDEO] 🔄 "
-                "Tentando próximo motor..."
-            )
+                print(
+                    "[VIDEO] 🔄 "
+                    "Tentando próximo motor..."
+                )
 
 
             continue
 
 
     # ========================================================
-    # TODOS OS MOTORES FALHARAM
+    # TODOS FALHARAM
     # ========================================================
 
-    print(
-        ""
-    )
+    if not erros:
 
-    print(
-        "================================"
-    )
-
-    print(
-        "❌ NENHUM MOTOR CONSEGUIU GERAR"
-    )
-
-    print(
-        "================================"
-    )
+        erros.append(
+            "Nenhum motor está "
+            "disponível no momento."
+        )
 
 
-    return ResultadoVideo(
-
-        sucesso=False,
-
-        motor="nenhum",
-
-        mensagem=(
-            "❌ NENHUM MOTOR DE VÍDEO "
-            "CONSEGUIU GERAR O VÍDEO."
-        ),
-
-        erro="\n".join(
+    raise RuntimeError(
+        "❌ NENHUM MOTOR DE VÍDEO "
+        "CONSEGUIU GERAR O VÍDEO.\n\n"
+        + "\n".join(
             erros
-        ),
-
+        )
     )
-
-
-# ============================================================
-# GERAR VÁRIOS CLIPES
-# ============================================================
-
-def gerar_clipes(
-    descricoes: list[str],
-    camera: str = "Sony FX6",
-    proporcao: str = "16:9",
-    duracao: int = 8,
-) -> list[ResultadoVideo]:
-
-    """
-    Permite criar um vídeo longo
-    dividindo-o em vários clipes.
-
-    Exemplo:
-
-    8 segundos
-    +
-    8 segundos
-    +
-    8 segundos
-    =
-    24 segundos
-    """
-
-    resultados = []
-
-
-    for indice, descricao in enumerate(
-        descricoes,
-        start=1
-    ):
-
-        print(
-            f"[VIDEO] Criando "
-            f"clipe {indice}/"
-            f"{len(descricoes)}"
-        )
-
-
-        nome = (
-            f"clipe_"
-            f"{indice:03d}.mp4"
-        )
-
-
-        resultado = gerar_video(
-
-            descricao=descricao,
-
-            camera=camera,
-
-            proporcao=proporcao,
-
-            duracao=duracao,
-
-            nome_arquivo=nome,
-
-        )
-
-
-        resultados.append(
-            resultado
-        )
-
-
-        # Se falhou completamente,
-        # não continua fingindo que
-        # os próximos existem.
-
-        if not resultado.sucesso:
-
-            print(
-                "[VIDEO] ❌ "
-                "Falha no clipe."
-            )
-
-            break
-
-
-    return resultados
 
 
 # ============================================================
 # STATUS DOS MOTORES
 # ============================================================
 
-def status_motores() -> list[dict]:
+def status_motores():
 
-    reativar_motores_expirados()
+    _reativar_motores_expirados()
 
+    agora = time.time()
 
     resultado = []
 
 
-    with LOCK_MOTORES:
+    for nome, dados in (
+        _estado_motores().items()
+    ):
 
-        for motor in MOTORES:
+        restante = max(
+            0,
+            int(
+                dados[
+                    "bloqueado_ate"
+                ]
+                - agora
+            ),
+        )
 
-            restante = max(
-                0,
-                int(
-                    motor.bloqueado_ate
-                    - time.time()
-                )
-            )
 
+        resultado.append({
 
-            resultado.append({
+            "motor":
+                nome,
 
-                "nome":
-                    motor.nome,
+            "ativo":
+                dados[
+                    "ativo"
+                ],
 
-                "ativo":
-                    motor.ativo,
+            "disponivel":
+                _motor_disponivel(
+                    nome
+                ),
 
-                "disponivel":
-                    motor_esta_disponivel(
-                        motor
-                    ),
+            "quota":
+                restante > 0,
 
-                "quota":
-                    motor.quota_atingida,
+            "reativacao_em_segundos":
+                restante,
 
-                "bloqueado_por_segundos":
-                    restante,
+            "erros":
+                dados[
+                    "erros"
+                ],
 
-                "erros":
-                    motor.quantidade_erros,
+            "sucessos":
+                dados[
+                    "sucessos"
+                ],
 
-                "sucessos":
-                    motor.quantidade_sucessos,
+            "ultimo_erro":
+                dados[
+                    "ultimo_erro"
+                ],
 
-                "ultimo_erro":
-                    motor.ultimo_erro,
-
-            })
+        })
 
 
     return resultado
@@ -1568,14 +1129,12 @@ def status_motores() -> list[dict]:
 # STATUS GERAL
 # ============================================================
 
-def status_video() -> dict:
+def status_video():
 
     return {
 
-        "pasta_videos":
-            str(
-                PASTA_VIDEOS
-            ),
+        "modelo_veo":
+            MODELO_VEO,
 
         "duracao_padrao":
             DURACAO_PADRAO,
@@ -1596,70 +1155,58 @@ def status_video() -> dict:
 
 
 # ============================================================
-# MOTOR NÃO CONFIGURADO
+# GERAR VÁRIOS CLIPES
 # ============================================================
 
-def motor_nao_configurado(
-    **kwargs
+def gerar_clipes(
+    descricoes,
+    camera="Sony FX6",
+    proporcao="16:9",
+    duracao=8,
 ):
 
-    raise RuntimeError(
-
-        "Este motor ainda não "
-        "foi conectado a uma "
-        "API real."
-
-    )
+    resultados = []
 
 
-# ============================================================
-# TESTE
-# ============================================================
+    for descricao in descricoes:
 
-if __name__ == "__main__":
+        try:
 
-    print(
-        "======================================"
-    )
+            resultado = (
+                gerar_video(
+                    prompt=descricao,
+                    camera=camera,
+                    proporcao=proporcao,
+                    duracao=duracao,
+                )
+            )
 
-    print(
-        "     ALEX IA ULTRA - VÍDEO"
-    )
 
-    print(
-        "======================================"
-    )
+            resultados.append(
+                resultado
+            )
 
-    print()
 
-    print(
-        "Status:"
-    )
+        except Exception as erro:
 
-    print(
-        status_video()
-    )
+            resultados.append({
 
-    print()
+                "video":
+                    None,
 
-    print(
-        "Sistema de fallback:"
-        " ATIVADO"
-    )
+                "motor":
+                    "nenhum",
 
-    print(
-        "Sistema de quota:"
-        " ATIVADO"
-    )
+                "sucesso":
+                    False,
 
-    print(
-        "Reativação automática:"
-        " ATIVADA"
-    )
+                "mensagem":
+                    str(erro),
 
-    print()
+            })
 
-    print(
-        "Nenhum motor real foi "
-        "conectado automaticamente."
-)
+
+            break
+
+
+    return resultados
