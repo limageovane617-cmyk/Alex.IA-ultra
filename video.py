@@ -169,15 +169,16 @@ def salvar_video(
 
 
 # ============================================================
-# 🎬 MOTOR 1
-# LTX-2.3 — HUGGING FACE
+# 🎬 LTX-2.3 — HUGGING FACE
 # ============================================================
 
 def gerar_ltx_huggingface(
     prompt,
     duration=5.0,
     height=512,
-    width=512
+    width=512,
+    imagem_bytes=None,
+    nome_imagem="imagem.png",
 ):
 
     if Client is None:
@@ -193,7 +194,33 @@ def gerar_ltx_huggingface(
         )
 
     # --------------------------------------------------------
-    # CONECTAR
+    # 🖼️ PREPARAR IMAGEM
+    # --------------------------------------------------------
+
+    caminho_imagem = None
+
+    if imagem_bytes:
+
+        extensao = (
+            Path(nome_imagem)
+            .suffix
+            .lower()
+        )
+
+        if not extensao:
+            extensao = ".png"
+
+        caminho_imagem = (
+            PASTA /
+            f"imagem_ltx{extensao}"
+        )
+
+        caminho_imagem.write_bytes(
+            imagem_bytes
+        )
+
+    # --------------------------------------------------------
+    # 🔗 CONECTAR AO HUGGING FACE
     # --------------------------------------------------------
 
     client = Client(
@@ -201,12 +228,16 @@ def gerar_ltx_huggingface(
     )
 
     # --------------------------------------------------------
-    # GERAR
+    # 🎬 GERAR VÍDEO
     # --------------------------------------------------------
 
     resultado = client.predict(
 
-        input_image=None,
+        input_image=(
+            str(caminho_imagem)
+            if caminho_imagem
+            else None
+        ),
 
         prompt=prompt.strip(),
 
@@ -232,7 +263,7 @@ def gerar_ltx_huggingface(
     )
 
     # --------------------------------------------------------
-    # RESULTADO
+    # 📦 RESULTADO
     # --------------------------------------------------------
 
     if isinstance(
@@ -279,7 +310,7 @@ def gerar_ltx_huggingface(
         "seed":
             seed,
 
-    }
+        }
 
 
 # ============================================================
