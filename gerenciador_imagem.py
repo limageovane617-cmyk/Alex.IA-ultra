@@ -1,12 +1,13 @@
 # ============================================================
-# 🖼️ ALEX IA ULTRA — TESTE DE GERAÇÃO DE IMAGENS
-# HUGGING FACE INFERENCE PROVIDERS
+# 🖼️ ALEX IA ULTRA — GERENCIADOR DE IMAGENS
+# PIXAZO — FLUX 1 SCHNELL
 # Criado por Geovani
 # ============================================================
 
 import os
 from pathlib import Path
 
+import requests
 import streamlit as st
 
 
@@ -14,24 +15,36 @@ import streamlit as st
 # ⚙️ CONFIGURAÇÃO
 # ============================================================
 
-MODELO_IMAGEM = "black-forest-labs/FLUX.1-schnell"
-PROVEDOR = "auto"
+PIXAZO_URL = (
+    "https://gateway.pixazo.ai/"
+    "flux-1-schnell/v1/getData"
+)
+
+MODELO_IMAGEM = "Flux 1 Schnell"
+MOTOR_IMAGEM = "Pixazo / Flux 1 Schnell"
 
 
 # ============================================================
-# 🔐 TOKEN HUGGING FACE
+# 🔐 API KEY PIXAZO
 # ============================================================
 
-def obter_token_huggingface():
+def obter_api_key_pixazo():
+
     try:
-        token = st.secrets.get("HF_TOKEN", "")
+        chave = st.secrets.get(
+            "PIXAZO_API_KEY",
+            ""
+        )
     except Exception:
-        token = ""
+        chave = ""
 
-    if not token:
-        token = os.environ.get("HF_TOKEN", "")
+    if not chave:
+        chave = os.environ.get(
+            "PIXAZO_API_KEY",
+            ""
+        )
 
-    return str(token).strip()
+    return str(chave).strip()
 
 
 # ============================================================
@@ -39,8 +52,16 @@ def obter_token_huggingface():
 # ============================================================
 
 def obter_pasta_imagens():
-    pasta = Path("/tmp/alex_ia_ultra_imagens")
-    pasta.mkdir(parents=True, exist_ok=True)
+
+    pasta = Path(
+        "/tmp/alex_ia_ultra_imagens"
+    )
+
+    pasta.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
     return pasta
 
 
@@ -48,93 +69,201 @@ def obter_pasta_imagens():
 # 💾 GUARDAR ÚLTIMA IMAGEM
 # ============================================================
 
-def guardar_ultima_imagem(imagem, prompt, caminho=None, motor=None):
+def guardar_ultima_imagem(
+    imagem,
+    prompt,
+    caminho=None,
+    motor=None,
+):
+
     try:
+
         st.session_state.ultima_imagem = imagem
         st.session_state.ultima_imagem_caminho = caminho
         st.session_state.ultimo_prompt_imagem = prompt
         st.session_state.ultimo_motor_imagem = motor
+
         return True
 
     except Exception:
+
         return False
 
 
 # ============================================================
-# 🎨 GERAR IMAGEM COM HUGGING FACE
+# 🎨 GERAR IMAGEM COM PIXAZO
 # ============================================================
 
-def gerar_imagem_huggingface(prompt):
+def gerar_imagem_pixazo(prompt):
 
-    token = obter_token_huggingface()
+    api_key = obter_api_key_pixazo()
 
-    if not token:
+    if not api_key:
+
         raise RuntimeError(
-            "HF_TOKEN não foi encontrado nos Secrets do Streamlit."
+            "PIXAZO_API_KEY não foi encontrada "
+            "nos Secrets do Streamlit."
         )
 
     # --------------------------------------------------------
-    # Importar Hugging Face
+    # Cabeçalhos
+    # --------------------------------------------------------
+
+    headers = {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+        "Ocp-Apim-Subscription-Key": api_key,
+    }
+
+    # --------------------------------------------------------
+    # Dados da geração
+    # --------------------------------------------------------
+
+    dados = {
+        "prompt": prompt.strip(),
+        "num_steps": 4,
+        "height": 1024,
+        "width": 1024,
+    }
+
+    # --------------------------------------------------------
+    # Enviar para Pixazo
     # --------------------------------------------------------
 
     try:
-        from huggingface_hub import InferenceClient
 
-    except Exception:
-        raise RuntimeError(
-            "A biblioteca huggingface_hub não está instalada. "
-            "Adicione huggingface_hub ao requirements.txt."
-        )
-
-    # --------------------------------------------------------
-    # Criar cliente
-    # --------------------------------------------------------
-
-    try:
-        cliente = InferenceClient(
-            provider=PROVEDOR,
-            api_key=token,
+        resposta = requests.post(
+            PIXAZO_URL,
+            headers=headers,
+            json=dados,
+            timeout=120,
         )
 
     except Exception as erro:
+
         raise RuntimeError(
-            f"Não foi possível iniciar o Hugging Face: {erro}"
+            f"Erro de conexão com a Pixazo: {erro}"
         )
 
     # --------------------------------------------------------
-    # Gerar imagem
+    # Verificar resposta HTTP
+    # --------------------------------------------------------
+
+    if resposta.status_code != 200:
+
+        try:
+            detalhes = resposta.json()
+
+        except Exception:
+            detalhes = resposta.text
+
+        raise RuntimeError(
+            f"Pixazo retornou HTTP "
+            f"{resposta.status_code}:\n\n"
+            f"{detalhes}"
+        )
+
+    # --------------------------------------------------------
+    # Ler resposta
     # --------------------------------------------------------
 
     try:
-        imagem = cliente.text_to_image(
-            prompt.strip(),
-            model=MODELO_IMAGEM,
+
+        resultado = resposta.json()
+
+    except Exception as erro:
+
+        raise RuntimeError(
+            f"A Pixazo não retornou JSON válido: {erro}"
+        )
+
+    # --------------------------------------------------------
+    # Procurar URL da imagem
+    # --------------------------------------------------------
+
+    imagem_url = None
+
+    if isinstance(resultado, dict):
+
+        imagem_url = (
+            resultado.get("output")
+            or resultado.get("image")
+            or resultado.get("image_url")
+            or resultado.get("url")
+        )
+
+    elif isinstance(resultado, list):
+
+        if resultado:
+
+            primeiro = resultado[0]
+
+            if isinstance(primeiro, str):
+
+                imagem_url = primeiro
+
+            elif isinstance(primeiro, dict):
+
+                imagem_url = (
+                    primeiro.get("output")
+                    or primeiro.get("image")
+                    or primeiro.get("image_url")
+                    or primeiro.get("url")
+                )
+
+    # --------------------------------------------------------
+    # Verificar URL
+    # --------------------------------------------------------
+
+    if not imagem_url:
+
+        raise RuntimeError(
+            "A Pixazo respondeu, mas não encontramos "
+            "a URL da imagem.\n\n"
+            f"Resposta recebida:\n{resultado}"
+        )
+
+    # --------------------------------------------------------
+    # Baixar imagem
+    # --------------------------------------------------------
+
+    try:
+
+        imagem = requests.get(
+            imagem_url,
+            timeout=120,
         )
 
     except Exception as erro:
+
         raise RuntimeError(
-            f"Erro na geração de imagem pelo Hugging Face: {erro}"
+            f"Erro ao baixar a imagem: {erro}"
         )
 
-    # --------------------------------------------------------
-    # Verificar retorno
-    # --------------------------------------------------------
+    if imagem.status_code != 200:
 
-    if imagem is None:
         raise RuntimeError(
-            "O Hugging Face não retornou uma imagem."
+            "Não foi possível baixar a imagem. "
+            f"HTTP {imagem.status_code}"
         )
 
     # --------------------------------------------------------
     # Salvar imagem
     # --------------------------------------------------------
 
-    caminho = obter_pasta_imagens() / "ultima_imagem.png"
+    caminho = (
+        obter_pasta_imagens()
+        / "ultima_imagem.png"
+    )
 
     try:
-        imagem.save(caminho)
+
+        caminho.write_bytes(
+            imagem.content
+        )
 
     except Exception as erro:
+
         raise RuntimeError(
             f"Não foi possível salvar a imagem: {erro}"
         )
@@ -149,24 +278,34 @@ def gerar_imagem_huggingface(prompt):
 def gerar_imagem(prompt):
 
     if not prompt or not prompt.strip():
-        return None, "❌ O prompt da imagem está vazio."
+
+        return (
+            None,
+            "❌ O prompt da imagem está vazio."
+        )
 
     try:
 
-        caminho = gerar_imagem_huggingface(prompt)
+        caminho = gerar_imagem_pixazo(
+            prompt
+        )
 
         guardar_ultima_imagem(
             imagem=caminho,
             prompt=prompt,
             caminho=caminho,
-            motor=f"Hugging Face / {MODELO_IMAGEM}",
+            motor=MOTOR_IMAGEM,
         )
 
-        return caminho, "🖼️ Imagem gerada com sucesso."
+        return (
+            caminho,
+            "🖼️ Imagem gerada com sucesso."
+        )
 
     except Exception as erro:
 
-        return None, (
+        return (
+            None,
             "❌ Erro ao gerar imagem:\n\n"
             f"{erro}"
         )
@@ -182,15 +321,22 @@ def mostrar_imagem(prompt):
         "🎨 Alex IA está criando sua imagem..."
     ):
 
-        imagem, mensagem = gerar_imagem(prompt)
+        imagem, mensagem = gerar_imagem(
+            prompt
+        )
 
     if imagem is None:
+
         st.error(mensagem)
+
         return False
 
     st.image(
         imagem,
-        caption="🖼️ Imagem gerada pela Alex IA Ultra",
+        caption=(
+            "🖼️ Imagem gerada pela "
+            "Alex IA Ultra"
+        ),
         use_container_width=True,
     )
 
@@ -200,6 +346,7 @@ def mostrar_imagem(prompt):
     )
 
     if motor:
+
         st.caption(
             f"🎨 Motor utilizado: {motor}"
         )
@@ -266,15 +413,17 @@ def limpar_ultima_imagem():
 
 def executar_teste():
 
-    st.title("🖼️ Teste de Geração de Imagem")
+    st.title(
+        "🖼️ Teste de Geração de Imagem"
+    )
 
     st.write(
-        "Este arquivo testa somente a geração "
-        "de imagens pelo Hugging Face."
+        "Teste da geração de imagens "
+        "usando Pixazo / Flux 1 Schnell."
     )
 
     st.info(
-        f"Modelo: {MODELO_IMAGEM}"
+        f"Motor: {MOTOR_IMAGEM}"
     )
 
     prompt = st.text_input(
@@ -282,7 +431,8 @@ def executar_teste():
         value=(
             "Um robô futurista caminhando "
             "em uma cidade cyberpunk à noite, "
-            "imagem cinematográfica, muito detalhada"
+            "imagem cinematográfica, "
+            "muito detalhada"
         ),
     )
 
@@ -292,9 +442,11 @@ def executar_teste():
     ):
 
         if not prompt.strip():
+
             st.warning(
                 "Digite um prompt para gerar a imagem."
             )
+
             return
 
         mostrar_imagem(prompt)
@@ -305,4 +457,5 @@ def executar_teste():
 # ============================================================
 
 if __name__ == "__main__":
+
     executar_teste()
