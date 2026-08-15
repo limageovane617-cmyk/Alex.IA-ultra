@@ -276,3 +276,71 @@ print("VIDEO.PY CARREGOU")
 print("gerar_video:", "gerar_video" in globals())
 print("mostrar_configuracao_video:", "mostrar_configuracao_video" in globals())
 print("verificar_magic_hour:", "verificar_magic_hour" in globals())
+# ============================================================
+# ⚙️ CONFIGURAÇÃO DO VÍDEO
+# ============================================================
+
+def mostrar_configuracao_video():
+
+    st.subheader("🎬 Configuração de Vídeo")
+
+    camera_video = st.selectbox(
+        "📷 Câmera",
+        CAMERAS,
+        index=0
+    )
+
+    proporcao_video = st.selectbox(
+        "📐 Proporção",
+        PROPORCOES,
+        index=1
+    )
+
+    duracao_video = st.number_input(
+        "⏱️ Duração do vídeo (segundos)",
+        min_value=1,
+        max_value=60,
+        value=DURACAO_PADRAO,
+        step=1
+    )
+
+    st.write("**🎥 Motores disponíveis:**")
+
+    for motor in MOTORES_VIDEO:
+        st.write(f"• {motor}")
+
+    return (
+        camera_video,
+        proporcao_video,
+        duracao_video
+    )
+
+
+# ============================================================
+# 🔎 TESTE MAGIC HOUR
+# ============================================================
+
+def verificar_magic_hour():
+
+    try:
+
+        chave = obter_api_key_magichour()
+
+        if chave:
+
+            return (
+                True,
+                "✅ MAGIC_HOUR_API_KEY foi encontrada."
+            )
+
+        return (
+            False,
+            "❌ MAGIC_HOUR_API_KEY não foi encontrada."
+        )
+
+    except Exception as erro:
+
+        return (
+            False,
+            f"❌ Erro ao verificar Magic Hour: {erro}"
+        )
