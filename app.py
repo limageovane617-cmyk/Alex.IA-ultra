@@ -488,26 +488,82 @@ if ferramenta:
                     st.rerun()
 
     # --------------------------------------------------------
-
     # 🎬 VÍDEO
     # --------------------------------------------------------
     elif ferramenta == "video":
 
-        st.caption("Configuração atual do gerador de vídeo.")
+        st.caption(
+            "🎬 Crie um vídeo a partir de uma descrição "
+            "ou de uma imagem."
+        )
+
+        # ----------------------------------------------------
+        # ⚙️ CONFIGURAÇÃO
+        # ----------------------------------------------------
 
         camera_video, proporcao_video, duracao_video = (
             mostrar_configuracao_video()
         )
 
+        # ----------------------------------------------------
+        # 🖼️ IMAGEM DE REFERÊNCIA
+        # ----------------------------------------------------
+
+        st.markdown("### 🖼️ Imagem para iniciar o vídeo")
+
+        imagem_video = st.file_uploader(
+            "📤 Enviar imagem",
+            type=[
+                "png",
+                "jpg",
+                "jpeg",
+                "webp"
+            ],
+            key="video_imagem_upload",
+            help=(
+                "Envie uma imagem para o vídeo começar "
+                "a partir dela."
+            ),
+        )
+
+        if imagem_video:
+
+            st.image(
+                imagem_video,
+                caption="🖼️ Imagem de referência",
+                use_container_width=True,
+            )
+
+            st.success(
+                "✅ Imagem carregada. "
+                "O vídeo será baseado nela."
+            )
+
+        else:
+
+            st.info(
+                "💡 Você também pode gerar um vídeo "
+                "sem imagem."
+            )
+
+        # ----------------------------------------------------
+        # 📝 DESCRIÇÃO
+        # ----------------------------------------------------
+
         descricao_video = st.text_area(
-            "Descrição do vídeo",
+            "📝 Descrição do vídeo",
             key="tool_prompt_video",
             placeholder=(
-                "Ex.: uma menina caminhando lentamente "
-                "em uma praia ao pôr do sol..."
+                "Ex.: a personagem começa a caminhar "
+                "lentamente para frente, enquanto a câmera "
+                "acompanha suavemente..."
             ),
-            height=120,
+            height=130,
         )
+
+        # ----------------------------------------------------
+        # 🎬 GERAR
+        # ----------------------------------------------------
 
         if st.button(
             "🎬 Gerar vídeo",
@@ -518,14 +574,32 @@ if ferramenta:
             if not descricao_video.strip():
 
                 st.warning(
-                    "⚠️ Digite a descrição do vídeo."
+                    "⚠️ Digite a descrição do que deve "
+                    "acontecer no vídeo."
                 )
 
             else:
 
-                # ------------------------------------------------
-                # 🎥 PREPARAR PROMPT
-                # ------------------------------------------------
+                # --------------------------------------------
+                # 🖼️ PREPARAR IMAGEM
+                # --------------------------------------------
+
+                imagem_bytes = None
+                nome_imagem = "imagem.png"
+
+                if imagem_video:
+
+                    imagem_bytes = (
+                        imagem_video.getvalue()
+                    )
+
+                    nome_imagem = (
+                        imagem_video.name
+                    )
+
+                # --------------------------------------------
+                # 🎥 PROMPT CINEMATOGRÁFICO
+                # --------------------------------------------
 
                 prompt_video = (
                     descricao_video.strip()
@@ -533,12 +607,14 @@ if ferramenta:
                     + f"Câmera cinematográfica: {camera_video}."
                     + f"\nProporção desejada: {proporcao_video}."
                     + "\nMovimento natural e cinematográfico."
-                    + "\nManter o mesmo personagem durante toda a cena."
+                    + "\nManter o mesmo personagem, rosto, cabelo, "
+                      "roupa, aparência e identidade durante "
+                      "toda a cena."
                 )
 
-                # ------------------------------------------------
+                # --------------------------------------------
                 # 🎬 GERAR
-                # ------------------------------------------------
+                # --------------------------------------------
 
                 with st.spinner(
                     "🎬 Gerando seu vídeo..."
@@ -548,22 +624,35 @@ if ferramenta:
 
                         resultado_video = gerar_video(
                             prompt=prompt_video,
-                            duracao=float(duracao_video),
+
+                            imagem_bytes=imagem_bytes,
+
+                            nome_imagem=nome_imagem,
+
+                            duracao=float(
+                                duracao_video
+                            ),
+
                             width=512,
+
                             height=512,
                         )
 
-                        # ------------------------------------------
-                        # ✅ SUCESSO
-                        # ------------------------------------------
+                        # ------------------------------------
+                        # RESULTADO
+                        # ------------------------------------
 
-                        caminho_video = resultado_video.get(
-                            "video"
+                        caminho_video = (
+                            resultado_video.get(
+                                "video"
+                            )
                         )
 
-                        motor_video = resultado_video.get(
-                            "motor",
-                            "Motor desconhecido"
+                        motor_video = (
+                            resultado_video.get(
+                                "motor",
+                                "Motor desconhecido"
+                            )
                         )
 
                         if caminho_video:
@@ -573,7 +662,8 @@ if ferramenta:
                             )
 
                             st.caption(
-                                f"🎥 Motor utilizado: {motor_video}"
+                                "🎥 Motor utilizado: "
+                                + motor_video
                             )
 
                             st.video(
@@ -596,8 +686,7 @@ if ferramenta:
                         else:
 
                             st.error(
-                                "❌ O motor terminou, "
-                                "mas não retornou o arquivo de vídeo."
+                                "❌ O vídeo não foi retornado."
                             )
 
                     except Exception as erro:
