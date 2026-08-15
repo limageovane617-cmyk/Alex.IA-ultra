@@ -124,7 +124,22 @@ cliente = criar_cliente_gemini()
 if cliente is None:
     st.error("❌ Não foi possível criar a conexão com o Gemini.")
     st.stop()
+    
+# ============================================================
+# 🔎 TESTE MAGIC HOUR
+# ============================================================
 
+def verificar_magic_hour():
+    try:
+        chave = obter_api_key_magichour()
+
+        if chave:
+            return True, "✅ MAGIC_HOUR_API_KEY foi encontrada."
+        else:
+            return False, "❌ MAGIC_HOUR_API_KEY não foi encontrada."
+
+    except Exception as erro:
+        return False, f"❌ Erro ao verificar Magic Hour: {erro}"
 
 # ============================================================
 # 🎨 FUNDO + VISUAL DO CHAT
