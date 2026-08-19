@@ -1,5 +1,5 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + CONFIGURAÇÕES
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + ÁUDIO AUTOMÁTICO
 # Criado por: Geovani
 # ============================================================
 
@@ -110,7 +110,7 @@ st.markdown(
 
     .main .block-container {{
         max-width: 980px;
-        padding-top: 1.2rem;
+        padding-top: 1.5rem;
         padding-bottom: 7rem;
     }}
 
@@ -132,7 +132,12 @@ st.markdown(
         gap: 0px !important;
     }}
 
-    /* Estilização dos Botões de Popover */
+    /* Estilização dos Botões de Popover sem sobreposição */
+    div[data-testid="stPopover"] {{
+        margin-top: 8px !important;
+        margin-bottom: 16px !important;
+    }}
+
     div[data-testid="stPopover"] > button {{
         background: rgba(12, 22, 36, 0.85) !important;
         border: 1px solid rgba(130, 210, 255, 0.3) !important;
@@ -157,14 +162,11 @@ st.caption(f"Criada por {CREATOR_NAME} • inteligência artificial pessoal")
 # 🧰 BARRA DE FERRAMENTAS & AJUSTES DE VÍDEO
 # ============================================================
 
-col_menu, col_video_cfg = st.columns([1, 2.5])
+col_menu, col_video_cfg = st.columns([1, 2])
 
 with col_menu:
     with st.popover("➕ Ferramentas"):
         st.subheader("🧰 Ferramentas da Ultra")
-
-        if st.button("🔊 Voz", use_container_width=True):
-            st.session_state.ferramenta_ativa = "voz"
 
         if st.button("💻 Código", use_container_width=True):
             st.session_state.ferramenta_ativa = "codigo"
@@ -187,20 +189,20 @@ with col_menu:
 
 with col_video_cfg:
     with st.popover("🎬 Configurações de Vídeo"):
-        st.subheader("⚙️ Detalhes de Vídeo Automático")
-        
+        st.subheader("⚙️ Detalhes do Vídeo Automático")
+
         st.session_state.video_duracao = st.slider(
             "Duração do Vídeo (Segundos):",
             min_value=2,
             max_value=15,
             value=st.session_state.video_duracao,
-            step=1
+            step=1,
         )
 
         st.session_state.video_proporcao = st.selectbox(
             "Formato / Proporção:",
             options=["16:9", "9:16", "1:1"],
-            index=0
+            index=0,
         )
 
 # Painel de ação de ferramentas
@@ -208,13 +210,7 @@ if st.session_state.ferramenta_ativa:
     ferramenta = st.session_state.ferramenta_ativa
 
     with st.expander(f"🛠️ Módulo Ativo: {ferramenta.capitalize()}", expanded=True):
-        if ferramenta == "voz":
-            texto_voz = st.text_area("Digite o texto para a Alex falar:")
-            if st.button("Gerar Áudio"):
-                if texto_voz:
-                    mostrar_audio(texto_voz)
-
-        elif ferramenta == "codigo":
+        if ferramenta == "codigo":
             st.info("💻 Envie seu código ou dúvida de programação direto no chat.")
 
         elif ferramenta == "arquivo":
@@ -278,6 +274,10 @@ for mensagem in st.session_state.mensagens:
 
             if texto:
                 st.write(texto)
+
+            # Áudio automático no final da resposta da Alex
+            if tipo == "texto" and texto:
+                mostrar_audio(texto)
 
 
 # ============================================================
@@ -371,7 +371,7 @@ if pergunta:
 
         st.rerun()
 
-    # 3. CONVERSA PADRÃO COM GEMINI
+    # 3. CONVERSA PADRÃO COM GEMINI + ÁUDIO AUTOMÁTICO
     else:
         contexto = "\n".join(
             f"{m['role']}: {m['content']}"
@@ -400,10 +400,12 @@ if pergunta:
                     )
 
                 st.write(texto)
+                mostrar_audio(texto)
 
             st.session_state.mensagens.append({
                 "role": "assistant",
                 "content": texto,
+                "tipo": "texto",
             })
 
             st.rerun()
