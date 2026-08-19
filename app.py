@@ -1,5 +1,5 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + MENU DE FERRAMENTAS
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + CONFIGURAÇÕES
 # Criado por: Geovani
 # ============================================================
 
@@ -49,6 +49,13 @@ if "mensagens" not in st.session_state:
 
 if "ferramenta_ativa" not in st.session_state:
     st.session_state.ferramenta_ativa = None
+
+# Configurações padrão de vídeo
+if "video_duracao" not in st.session_state:
+    st.session_state.video_duracao = 5
+
+if "video_proporcao" not in st.session_state:
+    st.session_state.video_proporcao = "16:9"
 
 # ============================================================
 # 🔐 SERVIÇOS
@@ -125,13 +132,14 @@ st.markdown(
         gap: 0px !important;
     }}
 
-    /* Estilização do Popover de Ferramentas */
+    /* Estilização dos Botões de Popover */
     div[data-testid="stPopover"] > button {{
         background: rgba(12, 22, 36, 0.85) !important;
         border: 1px solid rgba(130, 210, 255, 0.3) !important;
         color: #00d2ff !important;
         font-weight: bold !important;
         border-radius: 10px !important;
+        width: 100% !important;
     }}
     </style>
     """,
@@ -146,81 +154,79 @@ st.markdown(f"## 🤖 {AI_NAME}")
 st.caption(f"Criada por {CREATOR_NAME} • inteligência artificial pessoal")
 
 # ============================================================
-# 🧰 MENU DE FERRAMENTAS (BOTÃO DE +)
+# 🧰 BARRA DE FERRAMENTAS & AJUSTES DE VÍDEO
 # ============================================================
 
-with st.popover("➕"):
-    st.subheader("🧰 Ferramentas da Ultra")
+col_menu, col_video_cfg = st.columns([1, 2.5])
 
-    if st.button("🖼️ Imagem", use_container_width=True):
-        st.session_state.ferramenta_ativa = "imagem"
+with col_menu:
+    with st.popover("➕ Ferramentas"):
+        st.subheader("🧰 Ferramentas da Ultra")
 
-    if st.button("🎬 Vídeo", use_container_width=True):
-        st.session_state.ferramenta_ativa = "video"
+        if st.button("🔊 Voz", use_container_width=True):
+            st.session_state.ferramenta_ativa = "voz"
 
-    if st.button("🔊 Voz", use_container_width=True):
-        st.session_state.ferramenta_ativa = "voz"
+        if st.button("💻 Código", use_container_width=True):
+            st.session_state.ferramenta_ativa = "codigo"
 
-    if st.button("💻 Código", use_container_width=True):
-        st.session_state.ferramenta_ativa = "codigo"
+        if st.button("📎 Arquivo", use_container_width=True):
+            st.session_state.ferramenta_ativa = "arquivo"
 
-    if st.button("📎 Arquivo", use_container_width=True):
-        st.session_state.ferramenta_ativa = "arquivo"
+        if st.button("🎭 Personagem", use_container_width=True):
+            st.session_state.ferramenta_ativa = "personagem"
 
-    if st.button("🎭 Personagem", use_container_width=True):
-        st.session_state.ferramenta_ativa = "personagem"
+        if st.button("🧠 Memória", use_container_width=True):
+            st.session_state.ferramenta_ativa = "memoria"
 
-    if st.button("🧠 Memória", use_container_width=True):
-        st.session_state.ferramenta_ativa = "memoria"
+        st.divider()
 
-    st.divider()
+        if st.button("🗑️ Limpar chat", use_container_width=True):
+            st.session_state.mensagens = []
+            st.session_state.ferramenta_ativa = None
+            st.rerun()
 
-    if st.button("🗑️ Limpar chat", use_container_width=True):
-        st.session_state.mensagens = []
-        st.session_state.ferramenta_ativa = None
-        st.rerun()
+with col_video_cfg:
+    with st.popover("🎬 Configurações de Vídeo"):
+        st.subheader("⚙️ Detalhes de Vídeo Automático")
+        
+        st.session_state.video_duracao = st.slider(
+            "Duração do Vídeo (Segundos):",
+            min_value=2,
+            max_value=15,
+            value=st.session_state.video_duracao,
+            step=1
+        )
 
-# Painel de ação quando uma ferramenta manual for clicada
+        st.session_state.video_proporcao = st.selectbox(
+            "Formato / Proporção:",
+            options=["16:9", "9:16", "1:1"],
+            index=0
+        )
+
+# Painel de ação de ferramentas
 if st.session_state.ferramenta_ativa:
     ferramenta = st.session_state.ferramenta_ativa
 
-    with st.expander(f"🛠️ Modulo Ativo: {ferramenta.capitalize()}", expanded=True):
-        if ferramenta == "imagem":
-            prompt_img = st.text_input("Descreva a imagem que deseja criar:")
-            if st.button("Gerar Imagem Agora"):
-                if prompt_img:
-                    mostrar_imagem(prompt_img)
-                    st.session_state.ferramenta_ativa = None
-
-        elif ferramenta == "video":
-            prompt_vid = st.text_input("Descreva o vídeo que deseja criar:")
-            if st.button("Gerar Vídeo Agora"):
-                if prompt_vid:
-                    with st.spinner("🎬 Criando vídeo..."):
-                        res = gerar_video(descricao=prompt_vid)
-                        if res and res.get("sucesso"):
-                            st.video(res["video"])
-                    st.session_state.ferramenta_ativa = None
-
-        elif ferramenta == "voz":
+    with st.expander(f"🛠️ Módulo Ativo: {ferramenta.capitalize()}", expanded=True):
+        if ferramenta == "voz":
             texto_voz = st.text_area("Digite o texto para a Alex falar:")
             if st.button("Gerar Áudio"):
                 if texto_voz:
                     mostrar_audio(texto_voz)
 
         elif ferramenta == "codigo":
-            st.info("💻 Envie seu código ou pergunta sobre programação no chat abaixo.")
+            st.info("💻 Envie seu código ou dúvida de programação direto no chat.")
 
         elif ferramenta == "arquivo":
-            st.file_uploader("Envie um arquivo para análise:")
+            st.file_uploader("Envie um arquivo para a Alex analisar:")
 
         elif ferramenta == "personagem":
-            st.info("🎭 Ajuste o tom da Alex nas configurações ou peça no chat.")
+            st.info("🎭 A personalidade da Alex está configurada em tom natural.")
 
         elif ferramenta == "memoria":
-            st.info("🧠 Memória do sistema ativa.")
+            st.info("🧠 Memória do sistema sincronizada.")
 
-        if st.button("Fechar Ferramenta"):
+        if st.button("Fechar Módulo"):
             st.session_state.ferramenta_ativa = None
             st.rerun()
 
@@ -320,15 +326,15 @@ if pergunta:
                 resultado = gerar_video(
                     descricao=prompt_video,
                     camera="Sony FX6",
-                    proporcao="16:9",
-                    duracao=5,
+                    proporcao=st.session_state.video_proporcao,
+                    duracao=st.session_state.video_duracao,
                     width=512,
                     height=512,
                 )
 
                 if isinstance(resultado, dict) and resultado.get("sucesso") and resultado.get("video"):
                     caminho = resultado["video"]
-                    st.write(f"🎬 Aqui está o vídeo sobre: **{prompt_video}**")
+                    st.write(f"🎬 Aqui está o vídeo ({st.session_state.video_duracao}s) sobre: **{prompt_video}**")
                     st.video(caminho)
 
                     st.session_state.mensagens.append({
@@ -404,4 +410,4 @@ if pergunta:
 
         except Exception as erro:
             st.error(f"❌ Erro ao conversar com a Alex: {erro}")
-        
+    
