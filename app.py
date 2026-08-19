@@ -780,4 +780,5 @@ if pergunta:
 
         st.error(
             f"❌ Erro ao conversar com o Gemini: {erro}"
-        )
+            )
+            
