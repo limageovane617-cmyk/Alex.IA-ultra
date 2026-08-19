@@ -18,3 +18,5 @@ gradio_client
 
 openai>=1.0.0
 fal-client
+rembg
+pillow
