@@ -183,12 +183,25 @@ st.markdown(
         border: 1px solid rgba(130,210,255,.16);
     }}
 
-    /* Esconde os ícones de robô e humano nas mensagens */
-    [data-testid="stChatMessageAvatar"] {{
+    /* Remoção completa dos ícones de avatar (humano e robô) */
+    [data-testid="stChatMessageAvatar"],
+    [data-testid="stChatMessageAvatarCustom"],
+    .stChatMessageAvatar,
+    div[data-testid="stChatMessage"] > div:first-child {{
         display: none !important;
     }}
 
-    /* CSS para Travar a Barra e o Botão + no Rodapé */
+    /* Estilização da caixa de resposta da IA (Lado Esquerdo) */
+    div[data-testid="stChatMessage"] {{
+        padding: 14px 18px !important;
+        background: rgba(12, 22, 36, 0.75) !important;
+        border: 1px solid rgba(130, 210, 255, 0.18) !important;
+        border-radius: 18px 18px 18px 4px !important;
+        margin-bottom: 14px !important;
+        gap: 0px !important;
+    }}
+
+    /* Travar a Barra e o Botão + no Rodapé */
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {{
         position: fixed;
         bottom: 20px;
@@ -230,32 +243,54 @@ st.caption(
 for mensagem in st.session_state.mensagens:
 
     role = mensagem.get("role", "assistant")
+    texto = mensagem.get("content", "")
+    tipo = mensagem.get("tipo", "texto")
 
-    with st.chat_message(role):
+    # MENSAGEM DO USUÁRIO -> ALINHADA À DIREITA
+    if role == "user":
+        st.markdown(
+            f"""
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 14px;">
+                <div style="
+                    background: rgba(0, 132, 255, 0.32);
+                    border: 1px solid rgba(0, 180, 255, 0.45);
+                    color: #ffffff;
+                    padding: 10px 16px;
+                    border-radius: 18px 18px 2px 18px;
+                    max-width: 82%;
+                    font-size: 1rem;
+                    line-height: 1.5;
+                    word-wrap: break-word;">
+                    {texto}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-        tipo = mensagem.get("tipo", "texto")
+    # MENSAGEM DA IA -> ALINHADA À ESQUERDA
+    else:
+        with st.chat_message("assistant"):
 
-        if (
-            tipo == "imagem"
-            and mensagem.get("arquivo")
-            and os.path.exists(mensagem["arquivo"])
-        ):
-            st.image(
-                mensagem["arquivo"],
-                use_container_width=True
-            )
+            if (
+                tipo == "imagem"
+                and mensagem.get("arquivo")
+                and os.path.exists(mensagem["arquivo"])
+            ):
+                st.image(
+                    mensagem["arquivo"],
+                    use_container_width=True
+                )
 
-        elif (
-            tipo == "video"
-            and mensagem.get("arquivo")
-            and os.path.exists(mensagem["arquivo"])
-        ):
-            st.video(mensagem["arquivo"])
+            elif (
+                tipo == "video"
+                and mensagem.get("arquivo")
+                and os.path.exists(mensagem["arquivo"])
+            ):
+                st.video(mensagem["arquivo"])
 
-        texto = mensagem.get("content", "")
-
-        if texto:
-            st.write(texto)
+            if texto:
+                st.write(texto)
 
 
 # ============================================================
@@ -720,7 +755,7 @@ if pergunta:
             st.error("❌ Erro no gerador de vídeo.")
             st.code(str(erro))
 
-        st.stop()
+        st.rerun()
 
     if low.startswith("memorize:"):
 
@@ -732,7 +767,7 @@ if pergunta:
             salvar_memoria(texto_memoria)
 
         st.success("🧠 Memória salva.")
-        st.stop()
+        st.rerun()
 
     contexto = "\n".join(
         f"{m['role']}: {m['content']}"
@@ -776,9 +811,10 @@ if pergunta:
             "content": texto,
         })
 
+        st.rerun()
+
     except Exception as erro:
 
         st.error(
             f"❌ Erro ao conversar com o Gemini: {erro}"
-            )
-            
+        )
