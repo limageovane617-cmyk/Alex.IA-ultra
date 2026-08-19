@@ -172,7 +172,7 @@ st.markdown(
     .main .block-container {{
         max-width: 980px;
         padding-top: 1.2rem;
-        padding-bottom: 8rem;
+        padding-bottom: 9rem;
     }}
 
     .tool-panel {{
@@ -181,6 +181,22 @@ st.markdown(
         border-radius: 22px;
         background: rgba(8,17,29,.92);
         border: 1px solid rgba(130,210,255,.16);
+    }}
+
+    /* CSS para Travar a Barra e o Botão + no Rodapé */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {{
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 100%;
+        max-width: 940px;
+        z-index: 9999;
+        background: rgba(8, 17, 29, 0.95);
+        padding: 8px 12px;
+        border-radius: 25px;
+        border: 1px solid rgba(130, 210, 255, 0.2);
+        backdrop-filter: blur(10px);
     }}
 
     </style>
@@ -238,7 +254,7 @@ for mensagem in st.session_state.mensagens:
 
 
 # ============================================================
-# 🧰 PAINEL DA FERRAMENTA ATIVA (ABRE ACIMA DO CHAT)
+# 🧰 PAINEL DA FERRAMENTA ATIVA
 # ============================================================
 
 ferramenta = st.session_state.ferramenta_ativa
@@ -253,10 +269,6 @@ if ferramenta:
     if st.button("✕ Fechar ferramenta"):
         st.session_state.ferramenta_ativa = None
         st.rerun()
-
-    # ========================================================
-    # 🖼️ IMAGEM
-    # ========================================================
 
     if ferramenta == "imagem":
 
@@ -298,10 +310,6 @@ if ferramenta:
 
                     st.session_state.ferramenta_ativa = None
                     st.rerun()
-
-    # ========================================================
-    # 🎬 VÍDEO
-    # ========================================================
 
     elif ferramenta == "video":
 
@@ -447,10 +455,6 @@ if ferramenta:
 
                 st.code(str(erro_video))
 
-    # ========================================================
-    # 🔊 VOZ
-    # ========================================================
-
     elif ferramenta == "voz":
 
         st.session_state.usar_voz = st.checkbox(
@@ -462,10 +466,6 @@ if ferramenta:
             "A voz será usada nas próximas respostas."
         )
 
-    # ========================================================
-    # 💻 CÓDIGO
-    # ========================================================
-
     elif ferramenta == "codigo":
 
         st.selectbox(
@@ -473,10 +473,6 @@ if ferramenta:
             listar_linguagens(),
             key="tool_linguagem_codigo"
         )
-
-    # ========================================================
-    # 📎 ARQUIVO
-    # ========================================================
 
     elif ferramenta == "arquivo":
 
@@ -502,10 +498,6 @@ if ferramenta:
                     st.session_state.arquivo_nome = arquivo.name
 
                     st.success("✅ Arquivo carregado.")
-
-    # ========================================================
-    # 🎭 PERSONAGEM
-    # ========================================================
 
     elif ferramenta == "personagem":
 
@@ -571,10 +563,6 @@ if ferramenta:
                 st.success("✅ Personagem salvo.")
                 st.rerun()
 
-    # ========================================================
-    # 🧠 MEMÓRIA
-    # ========================================================
-
     elif ferramenta == "memoria":
 
         nova = st.text_area(
@@ -598,10 +586,9 @@ if ferramenta:
 
 
 # ============================================================
-# 💬 CHAT E MENU INFERIOR
+# 💬 CHAT FIXO NO RODAPÉ
 # ============================================================
 
-# Organização do botão + e da caixa de mensagem lado a lado no rodapé
 col_plus, col_chat = st.columns([1, 8], vertical_alignment="bottom")
 
 with col_plus:
@@ -659,10 +646,6 @@ if pergunta:
     })
 
     low = pergunta.lower()
-
-    # ========================================================
-    # 🎬 COMANDO VIDEO:
-    # ========================================================
 
     if low.startswith("video:"):
 
@@ -734,10 +717,6 @@ if pergunta:
 
         st.stop()
 
-    # ========================================================
-    # 🧠 MEMORIZAR
-    # ========================================================
-
     if low.startswith("memorize:"):
 
         texto_memoria = pergunta[
@@ -749,10 +728,6 @@ if pergunta:
 
         st.success("🧠 Memória salva.")
         st.stop()
-
-    # ========================================================
-    # 📚 CONTEXTO
-    # ========================================================
 
     contexto = "\n".join(
         f"{m['role']}: {m['content']}"
@@ -766,11 +741,6 @@ if pergunta:
         f"Histórico:\n{contexto}\n\n"
         f"Pergunta:\n{pergunta}"
     )
-
-    # ========================================================
-    # ========================================================
-    # 🤖 GEMINI
-    # ========================================================
 
     try:
 
@@ -805,4 +775,5 @@ if pergunta:
 
         st.error(
             f"❌ Erro ao conversar com o Gemini: {erro}"
-        )
+)
+            
