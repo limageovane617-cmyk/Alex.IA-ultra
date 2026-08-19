@@ -183,6 +183,11 @@ st.markdown(
         border: 1px solid rgba(130,210,255,.16);
     }}
 
+    /* Esconde os ícones de robô e humano nas mensagens */
+    [data-testid="stChatMessageAvatar"] {{
+        display: none !important;
+    }}
+
     /* CSS para Travar a Barra e o Botão + no Rodapé */
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {{
         position: fixed;
@@ -775,5 +780,4 @@ if pergunta:
 
         st.error(
             f"❌ Erro ao conversar com o Gemini: {erro}"
-)
-            
+        )
