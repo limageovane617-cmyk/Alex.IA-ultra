@@ -1,6 +1,6 @@
 # ============================================================
 # 🖼️ ALEX IA ULTRA — GERENCIADOR DE IMAGENS
-# PIXAZO + Z IMAGE TURBO
+# PIXAZO + Z IMAGE TURBO + REMOÇÃO AUTOMÁTICA DE FUNDO
 # FALLBACK AUTOMÁTICO
 # Criado por Geovani
 # ============================================================
@@ -10,6 +10,8 @@ from pathlib import Path
 
 import requests
 import streamlit as st
+from PIL import Image
+from rembg import remove
 
 
 # ============================================================
@@ -39,6 +41,33 @@ ZIMAGE_SPACE = (
 MOTOR_ZIMAGE = (
     "Z Image Turbo"
 )
+
+
+# ============================================================
+# ✂️ REMOÇÃO DE FUNDO AUTOMÁTICA
+# ============================================================
+
+def aplicar_remocao_fundo(caminho_arquivo):
+    """
+    Recebe o caminho de uma imagem, remove o fundo com rembg
+    e salva como PNG com canal Alpha (transparência real).
+    """
+    try:
+        if not caminho_arquivo or not os.path.exists(caminho_arquivo):
+            return caminho_arquivo
+
+        imagem_original = Image.open(caminho_arquivo)
+        imagem_sem_fundo = remove(imagem_original)
+
+        pasta = obter_pasta_imagens()
+        caminho_transparente = pasta / "ultima_imagem_transparente.png"
+
+        imagem_sem_fundo.save(caminho_transparente, format="PNG")
+        return str(caminho_transparente)
+
+    except Exception as erro:
+        # Se falhar o recorte por algum motivo, mantém a imagem original
+        return caminho_arquivo
 
 
 # ============================================================
@@ -496,31 +525,29 @@ def gerar_imagem(prompt):
             prompt
         )
 
+        caminho_transparente = aplicar_remocao_fundo(
+            caminho
+        )
+
         guardar_ultima_imagem(
 
-            imagem=caminho,
+            imagem=caminho_transparente,
 
             prompt=prompt,
 
-            caminho=caminho,
+            caminho=caminho_transparente,
 
             motor=MOTOR_PIXAZO,
         )
 
         return (
 
-            caminho,
+            caminho_transparente,
 
             "🖼️ Imagem gerada com sucesso."
         )
 
     except Exception:
-
-        # ----------------------------------------------------
-        # IMPORTANTE:
-        # NÃO MOSTRAR O ERRO DO PIXAZO.
-        # VAMOS DIRETO PARA O MOTOR 2.
-        # ----------------------------------------------------
 
         pass
 
@@ -534,20 +561,24 @@ def gerar_imagem(prompt):
             prompt
         )
 
+        caminho_transparente = aplicar_remocao_fundo(
+            caminho
+        )
+
         guardar_ultima_imagem(
 
-            imagem=caminho,
+            imagem=caminho_transparente,
 
             prompt=prompt,
 
-            caminho=caminho,
+            caminho=caminho_transparente,
 
             motor=MOTOR_ZIMAGE,
         )
 
         return (
 
-            caminho,
+            caminho_transparente,
 
             "🖼️ Imagem gerada com sucesso."
         )
@@ -577,8 +608,8 @@ def mostrar_imagem(prompt):
 
     with st.spinner(
 
-        "🎨 Alex IA está criando "
-        "sua imagem..."
+        "🎨 Alex IA está criando e "
+        "removendo o fundo da imagem..."
 
     ):
 
@@ -600,7 +631,7 @@ def mostrar_imagem(prompt):
 
         caption=(
             "🖼️ Imagem gerada pela "
-            "Alex IA Ultra"
+            "Alex IA Ultra (Fundo Transparente)"
         ),
 
         use_container_width=True,
@@ -692,7 +723,7 @@ def executar_teste():
 
     st.write(
         "Alex IA Ultra utiliza dois "
-        "motores com fallback automático."
+        "motores com fallback automático e remoção de fundo."
     )
 
     st.info(
@@ -706,10 +737,7 @@ def executar_teste():
 
         value=(
 
-            "Um robô futurista caminhando "
-            "em uma cidade cyberpunk à noite, "
-            "imagem cinematográfica, "
-            "muito detalhada"
+            "Um beija-flor voando com asas abertas"
         ),
     )
 
@@ -742,3 +770,4 @@ def executar_teste():
 if __name__ == "__main__":
 
     executar_teste()
+    
