@@ -15,7 +15,6 @@ from __future__ import annotations
 import os
 import time
 import random
-import base64
 from pathlib import Path
 from typing import Any, Optional
 
@@ -870,6 +869,10 @@ def gerar_magichour(
 
             dados = resposta.json()
 
+            status_projeto = dados.get("status")
+            if status_projeto == "failed":
+                raise RuntimeError("Magic Hour falhou na geração do vídeo.")
+
             url = encontrar_url_video(
                 dados
             )
@@ -1404,8 +1407,6 @@ __all__ = [
     "gerar_ltx_huggingface",
 
     "gerar_magichour",
-
-    "gerar_video_replicate",
 
     "mostrar_configuracao_video",
 
