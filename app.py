@@ -1,5 +1,5 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + ÁUDIO AUTOMÁTICO
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + CONTROLES NO RODAPÉ
 # Criado por: Geovani
 # ============================================================
 
@@ -111,7 +111,7 @@ st.markdown(
     .main .block-container {{
         max-width: 980px;
         padding-top: 1.5rem;
-        padding-bottom: 7rem;
+        padding-bottom: 2rem;
     }}
 
     /* Ocultar avatares */
@@ -132,18 +132,13 @@ st.markdown(
         gap: 0px !important;
     }}
 
-    /* Estilização dos Botões de Popover sem sobreposição */
-    div[data-testid="stPopover"] {{
-        margin-top: 8px !important;
-        margin-bottom: 16px !important;
-    }}
-
+    /* Estilo dos Botões do Rodapé */
     div[data-testid="stPopover"] > button {{
-        background: rgba(12, 22, 36, 0.85) !important;
+        background: rgba(12, 22, 36, 0.9) !important;
         border: 1px solid rgba(130, 210, 255, 0.3) !important;
         color: #00d2ff !important;
         font-weight: bold !important;
-        border-radius: 10px !important;
+        border-radius: 8px !important;
         width: 100% !important;
     }}
     </style>
@@ -152,83 +147,15 @@ st.markdown(
 )
 
 # ============================================================
-# 🤖 CABEÇALHO
+# 🤖 CABEÇALHO LIMPO
 # ============================================================
 
 st.markdown(f"## 🤖 {AI_NAME}")
 st.caption(f"Criada por {CREATOR_NAME} • inteligência artificial pessoal")
+st.divider()
 
 # ============================================================
-# 🧰 BARRA DE FERRAMENTAS & AJUSTES DE VÍDEO
-# ============================================================
-
-col_menu, col_video_cfg = st.columns([1, 2])
-
-with col_menu:
-    with st.popover("➕ Ferramentas"):
-        st.subheader("🧰 Ferramentas da Ultra")
-
-        if st.button("💻 Código", use_container_width=True):
-            st.session_state.ferramenta_ativa = "codigo"
-
-        if st.button("📎 Arquivo", use_container_width=True):
-            st.session_state.ferramenta_ativa = "arquivo"
-
-        if st.button("🎭 Personagem", use_container_width=True):
-            st.session_state.ferramenta_ativa = "personagem"
-
-        if st.button("🧠 Memória", use_container_width=True):
-            st.session_state.ferramenta_ativa = "memoria"
-
-        st.divider()
-
-        if st.button("🗑️ Limpar chat", use_container_width=True):
-            st.session_state.mensagens = []
-            st.session_state.ferramenta_ativa = None
-            st.rerun()
-
-with col_video_cfg:
-    with st.popover("🎬 Configurações de Vídeo"):
-        st.subheader("⚙️ Detalhes do Vídeo Automático")
-
-        st.session_state.video_duracao = st.slider(
-            "Duração do Vídeo (Segundos):",
-            min_value=2,
-            max_value=15,
-            value=st.session_state.video_duracao,
-            step=1,
-        )
-
-        st.session_state.video_proporcao = st.selectbox(
-            "Formato / Proporção:",
-            options=["16:9", "9:16", "1:1"],
-            index=0,
-        )
-
-# Painel de ação de ferramentas
-if st.session_state.ferramenta_ativa:
-    ferramenta = st.session_state.ferramenta_ativa
-
-    with st.expander(f"🛠️ Módulo Ativo: {ferramenta.capitalize()}", expanded=True):
-        if ferramenta == "codigo":
-            st.info("💻 Envie seu código ou dúvida de programação direto no chat.")
-
-        elif ferramenta == "arquivo":
-            st.file_uploader("Envie um arquivo para a Alex analisar:")
-
-        elif ferramenta == "personagem":
-            st.info("🎭 A personalidade da Alex está configurada em tom natural.")
-
-        elif ferramenta == "memoria":
-            st.info("🧠 Memória do sistema sincronizada.")
-
-        if st.button("Fechar Módulo"):
-            st.session_state.ferramenta_ativa = None
-            st.rerun()
-
-
-# ============================================================
-# 💬 HISTÓRICO DE MENSAGENS
+# 💬 HISTÓRICO DE MENSAGENS (ÁREA CENTRAL)
 # ============================================================
 
 for mensagem in st.session_state.mensagens:
@@ -279,12 +206,84 @@ for mensagem in st.session_state.mensagens:
             if tipo == "texto" and texto:
                 mostrar_audio(texto)
 
+# ============================================================
+# 🛠️ PAINEL DE FERRAMENTAS ATIVAS
+# ============================================================
+
+if st.session_state.ferramenta_ativa:
+    ferramenta = st.session_state.ferramenta_ativa
+
+    with st.expander(f"🛠️ Módulo Ativo: {ferramenta.capitalize()}", expanded=True):
+        if ferramenta == "codigo":
+            st.info("💻 Envie seu código ou dúvida de programação direto no chat.")
+
+        elif ferramenta == "arquivo":
+            st.file_uploader("Envie um arquivo para a Alex analisar:")
+
+        elif ferramenta == "personagem":
+            st.info("🎭 A personalidade da Alex está configurada em tom natural.")
+
+        elif ferramenta == "memoria":
+            st.info("🧠 Memória do sistema sincronizada.")
+
+        if st.button("Fechar Módulo"):
+            st.session_state.ferramenta_ativa = None
+            st.rerun()
 
 # ============================================================
-# 💬 ENTRADA DO CHAT (INTELIGENTE E AUTOMÁTICA)
+# 🧰 BARRA DE ENTRADA + BOTÕES NO RODAPÉ
 # ============================================================
 
+# Caixinha de texto principal
 pergunta = st.chat_input("Digite sua mensagem para a Alex...")
+
+# Botões posicionados LOGO ABAIXO da caixinha de digitação
+col_menu, col_video_cfg = st.columns([1, 1.5])
+
+with col_menu:
+    with st.popover("➕ Ferramentas"):
+        st.subheader("🧰 Ferramentas da Ultra")
+
+        if st.button("💻 Código", use_container_width=True):
+            st.session_state.ferramenta_ativa = "codigo"
+
+        if st.button("📎 Arquivo", use_container_width=True):
+            st.session_state.ferramenta_ativa = "arquivo"
+
+        if st.button("🎭 Personagem", use_container_width=True):
+            st.session_state.ferramenta_ativa = "personagem"
+
+        if st.button("🧠 Memória", use_container_width=True):
+            st.session_state.ferramenta_ativa = "memoria"
+
+        st.divider()
+
+        if st.button("🗑️ Limpar chat", use_container_width=True):
+            st.session_state.mensagens = []
+            st.session_state.ferramenta_ativa = None
+            st.rerun()
+
+with col_video_cfg:
+    with st.popover("🎬 Ajustes de Vídeo"):
+        st.subheader("⚙️ Configurar Vídeo Automático")
+
+        st.session_state.video_duracao = st.slider(
+            "Duração (Segundos):",
+            min_value=2,
+            max_value=15,
+            value=st.session_state.video_duracao,
+            step=1,
+        )
+
+        st.session_state.video_proporcao = st.selectbox(
+            "Proporção:",
+            options=["16:9", "9:16", "1:1"],
+            index=0,
+        )
+
+# ============================================================
+# 💬 PROCESSAMENTO DA MENSAGEM
+# ============================================================
 
 if pergunta:
     pergunta_limpa = pergunta.strip()
@@ -312,7 +311,7 @@ if pergunta:
     quer_imagem = any(g in low for g in gatilhos_imagem)
     quer_video = any(g in low for g in gatilhos_video)
 
-    # 1. DETECÇÃO DE VÍDEO NO CHAT
+    # 1. DETECÇÃO DE VÍDEO
     if quer_video:
         with st.chat_message("assistant"):
             with st.spinner("🎬 Alex IA está gerando seu vídeo..."):
@@ -348,7 +347,7 @@ if pergunta:
 
         st.rerun()
 
-    # 2. DETECÇÃO DE IMAGEM NO CHAT
+    # 2. DETECÇÃO DE IMAGEM
     elif quer_imagem:
         with st.chat_message("assistant"):
             prompt_imagem = re.sub(
@@ -371,7 +370,7 @@ if pergunta:
 
         st.rerun()
 
-    # 3. CONVERSA PADRÃO COM GEMINI + ÁUDIO AUTOMÁTICO
+    # 3. CONVERSA GEMINI + ÁUDIO AUTOMÁTICO
     else:
         contexto = "\n".join(
             f"{m['role']}: {m['content']}"
@@ -412,4 +411,4 @@ if pergunta:
 
         except Exception as erro:
             st.error(f"❌ Erro ao conversar com a Alex: {erro}")
-    
+            
