@@ -1,5 +1,5 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE & AUTOMÁTICO
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + MENU DE FERRAMENTAS
 # Criado por: Geovani
 # ============================================================
 
@@ -46,6 +46,9 @@ gerar_video = video.gerar_video
 
 if "mensagens" not in st.session_state:
     st.session_state.mensagens = []
+
+if "ferramenta_ativa" not in st.session_state:
+    st.session_state.ferramenta_ativa = None
 
 # ============================================================
 # 🔐 SERVIÇOS
@@ -104,7 +107,7 @@ st.markdown(
         padding-bottom: 7rem;
     }}
 
-    /* Ocultar avatares completamente */
+    /* Ocultar avatares */
     [data-testid="stChatMessageAvatar"],
     [data-testid="stChatMessageAvatarCustom"],
     .stChatMessageAvatar,
@@ -112,7 +115,7 @@ st.markdown(
         display: none !important;
     }}
 
-    /* Estilização dos balões da Alex (Lado Esquerdo) */
+    /* Estilização dos balões da Alex */
     div[data-testid="stChatMessage"] {{
         padding: 14px 18px !important;
         background: rgba(12, 22, 36, 0.75) !important;
@@ -120,6 +123,15 @@ st.markdown(
         border-radius: 18px 18px 18px 4px !important;
         margin-bottom: 14px !important;
         gap: 0px !important;
+    }}
+
+    /* Estilização do Popover de Ferramentas */
+    div[data-testid="stPopover"] > button {{
+        background: rgba(12, 22, 36, 0.85) !important;
+        border: 1px solid rgba(130, 210, 255, 0.3) !important;
+        color: #00d2ff !important;
+        font-weight: bold !important;
+        border-radius: 10px !important;
     }}
     </style>
     """,
@@ -132,6 +144,86 @@ st.markdown(
 
 st.markdown(f"## 🤖 {AI_NAME}")
 st.caption(f"Criada por {CREATOR_NAME} • inteligência artificial pessoal")
+
+# ============================================================
+# 🧰 MENU DE FERRAMENTAS (BOTÃO DE +)
+# ============================================================
+
+with st.popover("➕"):
+    st.subheader("🧰 Ferramentas da Ultra")
+
+    if st.button("🖼️ Imagem", use_container_width=True):
+        st.session_state.ferramenta_ativa = "imagem"
+
+    if st.button("🎬 Vídeo", use_container_width=True):
+        st.session_state.ferramenta_ativa = "video"
+
+    if st.button("🔊 Voz", use_container_width=True):
+        st.session_state.ferramenta_ativa = "voz"
+
+    if st.button("💻 Código", use_container_width=True):
+        st.session_state.ferramenta_ativa = "codigo"
+
+    if st.button("📎 Arquivo", use_container_width=True):
+        st.session_state.ferramenta_ativa = "arquivo"
+
+    if st.button("🎭 Personagem", use_container_width=True):
+        st.session_state.ferramenta_ativa = "personagem"
+
+    if st.button("🧠 Memória", use_container_width=True):
+        st.session_state.ferramenta_ativa = "memoria"
+
+    st.divider()
+
+    if st.button("🗑️ Limpar chat", use_container_width=True):
+        st.session_state.mensagens = []
+        st.session_state.ferramenta_ativa = None
+        st.rerun()
+
+# Painel de ação quando uma ferramenta manual for clicada
+if st.session_state.ferramenta_ativa:
+    ferramenta = st.session_state.ferramenta_ativa
+
+    with st.expander(f"🛠️ Modulo Ativo: {ferramenta.capitalize()}", expanded=True):
+        if ferramenta == "imagem":
+            prompt_img = st.text_input("Descreva a imagem que deseja criar:")
+            if st.button("Gerar Imagem Agora"):
+                if prompt_img:
+                    mostrar_imagem(prompt_img)
+                    st.session_state.ferramenta_ativa = None
+
+        elif ferramenta == "video":
+            prompt_vid = st.text_input("Descreva o vídeo que deseja criar:")
+            if st.button("Gerar Vídeo Agora"):
+                if prompt_vid:
+                    with st.spinner("🎬 Criando vídeo..."):
+                        res = gerar_video(descricao=prompt_vid)
+                        if res and res.get("sucesso"):
+                            st.video(res["video"])
+                    st.session_state.ferramenta_ativa = None
+
+        elif ferramenta == "voz":
+            texto_voz = st.text_area("Digite o texto para a Alex falar:")
+            if st.button("Gerar Áudio"):
+                if texto_voz:
+                    mostrar_audio(texto_voz)
+
+        elif ferramenta == "codigo":
+            st.info("💻 Envie seu código ou pergunta sobre programação no chat abaixo.")
+
+        elif ferramenta == "arquivo":
+            st.file_uploader("Envie um arquivo para análise:")
+
+        elif ferramenta == "personagem":
+            st.info("🎭 Ajuste o tom da Alex nas configurações ou peça no chat.")
+
+        elif ferramenta == "memoria":
+            st.info("🧠 Memória do sistema ativa.")
+
+        if st.button("Fechar Ferramenta"):
+            st.session_state.ferramenta_ativa = None
+            st.rerun()
+
 
 # ============================================================
 # 💬 HISTÓRICO DE MENSAGENS
@@ -183,14 +275,10 @@ for mensagem in st.session_state.mensagens:
 
 
 # ============================================================
-# 💬 ENTRADA DO CHAT
+# 💬 ENTRADA DO CHAT (INTELIGENTE E AUTOMÁTICA)
 # ============================================================
 
 pergunta = st.chat_input("Digite sua mensagem para a Alex...")
-
-# ============================================================
-# ⚙️ DETECÇÃO INTELIGENTE & PROCESSAMENTO
-# ============================================================
 
 if pergunta:
     pergunta_limpa = pergunta.strip()
@@ -204,49 +292,30 @@ if pergunta:
 
     low = pergunta_limpa.lower()
 
-    # Gatilhos para Imagem
     gatilhos_imagem = [
-        "cria uma imagem",
-        "gera uma imagem",
-        "gerar imagem",
-        "crie uma imagem",
-        "faz uma imagem",
-        "desenha ",
-        "desenhe ",
-        "imagem de ",
-        "foto de ",
-        "gera imagem",
+        "cria uma imagem", "gera uma imagem", "gerar imagem",
+        "crie uma imagem", "faz uma imagem", "desenha ", "desenhe ",
+        "imagem de ", "foto de ", "gera imagem"
     ]
 
-    # Gatilhos para Vídeo
     gatilhos_video = [
-        "cria um vídeo",
-        "gera um vídeo",
-        "gerar vídeo",
-        "crie um vídeo",
-        "faz um vídeo",
-        "vídeo de ",
-        "gera vídeo",
-        "faça um vídeo",
+        "cria um vídeo", "gera um vídeo", "gerar vídeo",
+        "crie um vídeo", "faz um vídeo", "vídeo de ", "gera vídeo", "faça um vídeo"
     ]
 
     quer_imagem = any(g in low for g in gatilhos_imagem)
     quer_video = any(g in low for g in gatilhos_video)
 
-    # 1. AUTODETECÇÃO DE VÍDEO
+    # 1. DETECÇÃO DE VÍDEO NO CHAT
     if quer_video:
         with st.chat_message("assistant"):
             with st.spinner("🎬 Alex IA está gerando seu vídeo..."):
-                # Remove o prefixo/comando e deixa só o prompt do vídeo
                 prompt_video = re.sub(
                     r"(cria|gera|gerar|crie|faz|faça)\s+(um\s+)?vídeo(\s+de)?",
                     "",
                     pergunta_limpa,
                     flags=re.IGNORECASE,
-                ).strip()
-
-                if not prompt_video:
-                    prompt_video = pergunta_limpa
+                ).strip() or pergunta_limpa
 
                 resultado = gerar_video(
                     descricao=prompt_video,
@@ -257,13 +326,9 @@ if pergunta:
                     height=512,
                 )
 
-                if (
-                    isinstance(resultado, dict)
-                    and resultado.get("sucesso")
-                    and resultado.get("video")
-                ):
+                if isinstance(resultado, dict) and resultado.get("sucesso") and resultado.get("video"):
                     caminho = resultado["video"]
-                    st.write(f"🎬 Aqui está o vídeo que você pediu sobre: **{prompt_video}**")
+                    st.write(f"🎬 Aqui está o vídeo sobre: **{prompt_video}**")
                     st.video(caminho)
 
                     st.session_state.mensagens.append({
@@ -277,19 +342,15 @@ if pergunta:
 
         st.rerun()
 
-    # 2. AUTODETECÇÃO DE IMAGEM
+    # 2. DETECÇÃO DE IMAGEM NO CHAT
     elif quer_imagem:
         with st.chat_message("assistant"):
-            # Limpa o comando para pegar só o objeto da imagem
             prompt_imagem = re.sub(
                 r"(cria|gera|gerar|crie|faz|desenha|desenhe)\s+(uma\s+)?(imagem|foto)?(\s+de)?",
                 "",
                 pergunta_limpa,
                 flags=re.IGNORECASE,
-            ).strip()
-
-            if not prompt_imagem:
-                prompt_imagem = pergunta_limpa
+            ).strip() or pergunta_limpa
 
             sucesso = mostrar_imagem(prompt_imagem)
 
@@ -304,7 +365,7 @@ if pergunta:
 
         st.rerun()
 
-    # 3. CONVERSA NORMAL DE TEXTO COM O GEMINI
+    # 3. CONVERSA PADRÃO COM GEMINI
     else:
         contexto = "\n".join(
             f"{m['role']}: {m['content']}"
@@ -343,4 +404,4 @@ if pergunta:
 
         except Exception as erro:
             st.error(f"❌ Erro ao conversar com a Alex: {erro}")
-    
+        
