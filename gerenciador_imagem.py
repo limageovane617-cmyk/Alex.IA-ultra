@@ -11,7 +11,6 @@ from pathlib import Path
 import requests
 import streamlit as st
 from PIL import Image
-from rembg import remove
 
 
 # ============================================================
@@ -44,7 +43,7 @@ MOTOR_ZIMAGE = (
 
 
 # ============================================================
-# ✂️ REMOÇÃO DE FUNDO AUTOMÁTICA
+# ✂️ REMOÇÃO DE FUNDO AUTOMÁTICA (IMPORTAÇÃO SEGURA)
 # ============================================================
 
 def aplicar_remocao_fundo(caminho_arquivo):
@@ -56,6 +55,9 @@ def aplicar_remocao_fundo(caminho_arquivo):
         if not caminho_arquivo or not os.path.exists(caminho_arquivo):
             return caminho_arquivo
 
+        # Importação dentro da função para evitar queda do app na inicialização
+        from rembg import remove
+
         imagem_original = Image.open(caminho_arquivo)
         imagem_sem_fundo = remove(imagem_original)
 
@@ -66,7 +68,8 @@ def aplicar_remocao_fundo(caminho_arquivo):
         return str(caminho_transparente)
 
     except Exception as erro:
-        # Se falhar o recorte por algum motivo, mantém a imagem original
+        # Se a remoção de fundo falhar, exibe um aviso e retorna a imagem original sem travar o app
+        st.warning(f"⚠️ Não foi possível aplicar fundo transparente: {erro}")
         return caminho_arquivo
 
 
@@ -631,7 +634,7 @@ def mostrar_imagem(prompt):
 
         caption=(
             "🖼️ Imagem gerada pela "
-            "Alex IA Ultra (Fundo Transparente)"
+            "Alex IA Ultra"
         ),
 
         use_container_width=True,
@@ -770,4 +773,4 @@ def executar_teste():
 if __name__ == "__main__":
 
     executar_teste()
-    
+        
