@@ -1,5 +1,5 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + CONTROLES FIXOS NO RODAPÉ
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + BOTOES MINIMALISTAS
 # Criado por: Geovani
 # ============================================================
 
@@ -75,7 +75,7 @@ if cliente is None:
 
 
 # ============================================================
-# 🖼️ FUNDO & CSS FIXO
+# 🖼️ FUNDO & CSS MINIMALISTA
 # ============================================================
 
 def imagem_fundo_css():
@@ -111,7 +111,7 @@ st.markdown(
     .main .block-container {{
         max-width: 980px;
         padding-top: 1.5rem;
-        padding-bottom: 140px !important; /* Dá espaço para os botões fixos não cobrirem o chat */
+        padding-bottom: 150px !important;
     }}
 
     /* Ocultar avatares */
@@ -122,7 +122,7 @@ st.markdown(
         display: none !important;
     }}
 
-    /* Estilização dos balões da Alex */
+    /* Balões da Alex */
     div[data-testid="stChatMessage"] {{
         padding: 14px 18px !important;
         background: rgba(12, 22, 36, 0.75) !important;
@@ -132,30 +132,32 @@ st.markdown(
         gap: 0px !important;
     }}
 
-    /* FIXA A BARRA DE BOTÕES NO RODAPÉ (EXATAMENTE ACIMA DO CHAT INPUT) */
+    /* BARRA FLUTUANTE SEM DETALHES/SEM QUADRO ESCURO */
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {{
         position: fixed !important;
-        bottom: 75px !important;
+        bottom: 85px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
         width: 90% !important;
         max-width: 980px !important;
         z-index: 9999 !important;
-        background: rgba(12, 22, 36, 0.90) !important;
-        padding: 8px 12px !important;
-        border-radius: 14px !important;
-        border: 1px solid rgba(130, 210, 255, 0.25) !important;
-        backdrop-filter: blur(10px) !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
     }}
 
-    /* Estilo interno dos botões Popover */
+    /* BOTOES PÍLULA MINIMALISTAS */
     div[data-testid="stPopover"] > button {{
-        background: rgba(0, 132, 255, 0.2) !important;
-        border: 1px solid rgba(130, 210, 255, 0.4) !important;
+        background: rgba(12, 22, 36, 0.85) !important;
+        border: 1px solid rgba(0, 210, 255, 0.35) !important;
         color: #00d2ff !important;
-        font-weight: bold !important;
-        border-radius: 8px !important;
-        width: 100% !important;
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+        border-radius: 20px !important;
+        padding: 4px 12px !important;
+        backdrop-filter: blur(8px) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
     }}
     </style>
     """,
@@ -171,7 +173,7 @@ st.caption(f"Criada por {CREATOR_NAME} • inteligência artificial pessoal")
 st.divider()
 
 # ============================================================
-# 💬 HISTÓRICO DE MENSAGENS (ÁREA CENTRAL)
+# 💬 HISTÓRICO DE MENSAGENS
 # ============================================================
 
 for mensagem in st.session_state.mensagens:
@@ -218,12 +220,11 @@ for mensagem in st.session_state.mensagens:
             if texto:
                 st.write(texto)
 
-            # Áudio automático no final da resposta da Alex
             if tipo == "texto" and texto:
                 mostrar_audio(texto)
 
 # ============================================================
-# 🛠️ PAINEL DE FERRAMENTAS ATIVAS (EXPANDER)
+# 🛠️ PAINEL DE FERRAMENTAS ATIVAS
 # ============================================================
 
 if st.session_state.ferramenta_ativa:
@@ -247,10 +248,10 @@ if st.session_state.ferramenta_ativa:
             st.rerun()
 
 # ============================================================
-# 🧰 BARRA DE FERRAMENTAS FIXA NO RODAPÉ
+# 🧰 BOTOES FLUTUANTES MINIMALISTAS
 # ============================================================
 
-col_menu, col_video_cfg = st.columns([1, 1.2])
+col_menu, col_video_cfg = st.columns([1, 1])
 
 with col_menu:
     with st.popover("➕ Ferramentas"):
@@ -276,7 +277,7 @@ with col_menu:
             st.rerun()
 
 with col_video_cfg:
-    with st.popover("🎬 Ajustes de Vídeo"):
+    with st.popover("🎬 Ajustes Vídeo"):
         st.subheader("⚙️ Configurar Vídeo Automático")
 
         st.session_state.video_duracao = st.slider(
@@ -294,7 +295,7 @@ with col_video_cfg:
         )
 
 # ============================================================
-# 💬 ENTRADA DO CHAT (RODAPÉ)
+# 💬 ENTRADA DO CHAT
 # ============================================================
 
 pergunta = st.chat_input("Digite sua mensagem para Alex...")
@@ -425,4 +426,4 @@ if pergunta:
 
         except Exception as erro:
             st.error(f"❌ Erro ao conversar com a Alex: {erro}")
-                    
+            
