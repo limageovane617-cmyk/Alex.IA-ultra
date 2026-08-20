@@ -1,12 +1,10 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (BOTÕES ABAIXO DO CHAT)
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (COM FUNCTION CALLING)
 # Criado por: Geovani
 # ============================================================
 
 import base64
 import importlib
-import os
-import re
 import sys
 from pathlib import Path
 
@@ -33,12 +31,9 @@ else:
     import gerenciador_imagem
 
 from config_ultra import AI_NAME, CREATOR_NAME, GEMINI_MODEL, SYSTEM_PROMPT
-from gerenciador_imagem import mostrar_imagem
+from core.brain import processar_resposta_alex
 from servicos import criar_cliente_gemini, verificar_servicos
 from voz import mostrar_audio
-import video
-
-gerar_video = video.gerar_video
 
 # ============================================================
 # 🧠 SESSION STATE
@@ -74,7 +69,7 @@ if cliente is None:
 
 
 # ============================================================
-# 🖼️ FUNDO & CSS AJUSTADO PARA O POSICIONAMENTO EXATO
+# 🖼️ FUNDO & CSS
 # ============================================================
 
 def imagem_fundo_css():
@@ -107,14 +102,12 @@ st.markdown(
         pointer-events: none;
     }}
 
-    /* Espaço para o histórico não ficar escondido */
     .main .block-container {{
         max-width: 980px;
         padding-top: 1.5rem;
         padding-bottom: 160px !important;
     }}
 
-    /* Ocultar avatares */
     [data-testid="stChatMessageAvatar"],
     [data-testid="stChatMessageAvatarCustom"],
     .stChatMessageAvatar,
@@ -122,7 +115,6 @@ st.markdown(
         display: none !important;
     }}
 
-    /* Balões de conversa */
     div[data-testid="stChatMessage"] {{
         padding: 14px 18px !important;
         background: rgba(12, 22, 36, 0.75) !important;
@@ -132,12 +124,10 @@ st.markdown(
         gap: 0px !important;
     }}
 
-    /* SUBIR O CAMPO DE TEXTO PARA DAR ESPAÇO AOS BOTÕES ABAIXO */
     div[data-testid="stBottom"] {{
         padding-bottom: 50px !important;
     }}
 
-    /* FIXA OS BOTÕES LADO A LADO NA PARTE INFERIOR */
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {{
         position: fixed !important;
         bottom: 10px !important;
@@ -153,7 +143,6 @@ st.markdown(
         width: auto !important;
     }}
 
-    /* ESTILO DOS BOTÕES CIRCULARES DA BARRA */
     div[data-testid="stPopover"] > button {{
         background: rgba(12, 22, 36, 0.90) !important;
         border: 1px solid rgba(0, 210, 255, 0.4) !important;
@@ -217,14 +206,14 @@ for mensagem in st.session_state.mensagens:
             if (
                 tipo == "imagem"
                 and mensagem.get("arquivo")
-                and os.path.exists(mensagem["arquivo"])
+                and Path(mensagem["arquivo"]).exists()
             ):
                 st.image(mensagem["arquivo"], use_container_width=True)
 
             elif (
                 tipo == "video"
                 and mensagem.get("arquivo")
-                and os.path.exists(mensagem["arquivo"])
+                and Path(mensagem["arquivo"]).exists()
             ):
                 st.video(mensagem["arquivo"])
 
@@ -262,7 +251,7 @@ if st.session_state.ferramenta_ativa:
             st.rerun()
 
 # ============================================================
-# 🧰 BOTÕES POSICIONADOS LADO A LADO NA PARTE INFERIOR
+# 🧰 BOTÕES NA PARTE INFERIOR
 # ============================================================
 
 col_menu, col_video_cfg = st.columns([1, 1])
@@ -309,7 +298,7 @@ with col_video_cfg:
         )
 
 # ============================================================
-# 💬 ENTRADA DO CHAT
+# 💬 ENTRADA DO CHAT COM AUTONOMIA NATIVA (CORE/BRAIN)
 # ============================================================
 
 pergunta = st.chat_input("Digite sua mensagem para Alex...")
@@ -324,124 +313,42 @@ if pergunta:
         "content": pergunta_limpa,
     })
 
-    low = pergunta_limpa.lower()
+    with st.chat_message("assistant"):
+        with st.spinner("🤖 Alex IA está pensando..."):
+            config_vid = {
+                "duracao": st.session_state.video_duracao,
+                "proporcao": st.session_state.video_proporcao,
+            }
 
-    gatilhos_imagem = [
-        "cria uma imagem", "gera uma imagem", "gerar imagem",
-        "crie uma imagem", "faz uma imagem", "desenha ", "desenhe ",
-        "imagem de ", "foto de ", "gera imagem"
-    ]
+            resultado = processar_resposta_alex(
+                cliente=cliente,
+                modelo_id=GEMINI_MODEL,
+                prompt_sistema=SYSTEM_PROMPT,
+                historico=st.session_state.mensagens,
+                mensagem_usuario=pergunta_limpa,
+                config_video=config_vid,
+            )
 
-    gatilhos_video = [
-        "cria um vídeo", "gera um vídeo", "gerar vídeo",
-        "crie um vídeo", "faz um vídeo", "vídeo de ", "gera vídeo", "faça um vídeo"
-    ]
+            if resultado["tipo"] == "imagem" and resultado["arquivo"]:
+                st.image(resultado["arquivo"], use_container_width=True)
 
-    quer_imagem = any(g in low for g in gatilhos_imagem)
-    quer_video = any(g in low for g in gatilhos_video)
+            elif resultado["tipo"] == "video" and resultado["arquivo"]:
+                st.video(resultado["arquivo"])
 
-    # 1. DETECÇÃO DE VÍDEO
-    if quer_video:
-        with st.chat_message("assistant"):
-            with st.spinner("🎬 Alex IA está gerando seu vídeo..."):
-                prompt_video = re.sub(
-                    r"(cria|gera|gerar|crie|faz|faça)\s+(um\s+)?vídeo(\s+de)?",
-                    "",
-                    pergunta_limpa,
-                    flags=re.IGNORECASE,
-                ).strip() or pergunta_limpa
+            st.write(resultado["texto"])
 
-                resultado = gerar_video(
-                    descricao=prompt_video,
-                    camera="Sony FX6",
-                    proporcao=st.session_state.video_proporcao,
-                    duracao=st.session_state.video_duracao,
-                    width=512,
-                    height=512,
-                )
-
-                if isinstance(resultado, dict) and resultado.get("sucesso") and resultado.get("video"):
-                    caminho = resultado["video"]
-                    st.write(f"🎬 Aqui está o vídeo ({st.session_state.video_duracao}s) sobre: **{prompt_video}**")
-                    st.video(caminho)
-
-                    st.session_state.mensagens.append({
-                        "role": "assistant",
-                        "content": f"🎬 Vídeo gerado: {prompt_video}",
-                        "tipo": "video",
-                        "arquivo": caminho,
-                    })
-                else:
-                    st.error("❌ Não foi possível gerar o vídeo neste momento.")
-
-        st.rerun()
-
-    # 2. DETECÇÃO DE IMAGEM
-    elif quer_imagem:
-        with st.chat_message("assistant"):
-            prompt_imagem = re.sub(
-                r"(cria|gera|gerar|crie|faz|desenha|desenhe)\s+(uma\s+)?(imagem|foto)?(\s+de)?",
-                "",
-                pergunta_limpa,
-                flags=re.IGNORECASE,
-            ).strip() or pergunta_limpa
-
-            sucesso = mostrar_imagem(prompt_imagem)
-
-            if sucesso:
-                caminho_img = st.session_state.get("ultima_imagem_caminho")
-                st.session_state.mensagens.append({
-                    "role": "assistant",
-                    "content": f"🖼️ Imagem gerada: {prompt_imagem}",
-                    "tipo": "imagem",
-                    "arquivo": caminho_img,
-                })
-
-        st.rerun()
-
-    # 3. CONVERSA GEMINI + ÁUDIO AUTOMÁTICO
-    else:
-        contexto = "\n".join(
-            f"{m['role']}: {m['content']}"
-            for m in st.session_state.mensagens[-20:]
-            if m.get("tipo") not in ("imagem", "video")
-        )
-
-        instrucao = (
-            f"{SYSTEM_PROMPT}\n\n"
-            "Responda sempre em português do Brasil.\n\n"
-            f"Histórico:\n{contexto}\n\n"
-            f"Pergunta:\n{pergunta_limpa}"
-        )
-
-        try:
-            with st.chat_message("assistant"):
-                with st.spinner("🤖 Alex IA está pensando..."):
-                    resposta = cliente.models.generate_content(
-                        model=GEMINI_MODEL, contents=instrucao
-                    )
-
-                    texto = (
-                        resposta.text
-                        if resposta.text
-                        else "Não consegui gerar uma resposta."
-                    )
-
-                st.write(texto)
-
+            if resultado["tipo"] == "texto":
                 try:
-                    mostrar_audio(texto)
+                    mostrar_audio(resultado["texto"])
                 except Exception:
                     pass
 
             st.session_state.mensagens.append({
                 "role": "assistant",
-                "content": texto,
-                "tipo": "texto",
+                "content": resultado["texto"],
+                "tipo": resultado["tipo"],
+                "arquivo": resultado["arquivo"],
             })
 
-            st.rerun()
-
-        except Exception as erro:
-            st.error(f"❌ Erro ao conversar com a Alex: {erro}")
+    st.rerun()
 
