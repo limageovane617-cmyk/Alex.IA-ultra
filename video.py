@@ -1,13 +1,5 @@
 # ============================================================
 # Alex IA Ultra — Gerenciador de Vídeo
-#
-# Motores:
-# 1. Wan 2.2 14B FP8 — R3GM
-# 2. Wan 2.2 14B I2V — Upsampler
-# 3. LTX-2.3 — Hugging Face
-# 4. Magic Hour — LTX-2.3
-# 5. Kling 2.1 — Replicate (manual)
-# 6. Pollinations AI (Fallback Gratuito de Texto para Vídeo)
 # ============================================================
 
 from __future__ import annotations
@@ -33,13 +25,10 @@ except Exception:
 # ============================================================
 
 NOME_MODULO = "Alex IA Ultra — Gerenciador de Vídeo"
-
 DURACAO_PADRAO = 5
 
 R3GM_SPACE = "r3gm/wan2-2-fp8da-aoti-preview"
-
 UPSAMPLER_SPACE = "Upsampler/wan-2-2-14b-image-to-video"
-
 LTX_HF_SPACE = "https://lightricks-ltx-2-3.hf.space"
 
 MAGIC_HOUR_BASE_URL = "https://api.magichour.ai/v1"
@@ -47,31 +36,16 @@ MAGIC_HOUR_MODELO = "ltx-2.3"
 MAGIC_HOUR_RESOLUCAO = "480p"
 MAGIC_HOUR_DURACAO = 5
 
-
-CAMERAS = [
-    "Sony FX5",
-    "Sony FX6",
-    "Canon EOS C80",
-    "ARRI Alexa Mini LF",
-]
-
-
-PROPORCOES = [
-    "1:1",
-    "16:9",
-    "9:16",
-]
-
-
+CAMERAS = ["Sony FX5", "Sony FX6", "Canon EOS C80", "ARRI Alexa Mini LF"]
+PROPORCOES = ["1:1", "16:9", "9:16"]
 MOTORES_VIDEO = [
     "Wan 2.2 — R3GM",
     "Wan 2.2 — Upsampler",
     "LTX-2.3 — Hugging Face",
     "Magic Hour — LTX-2.3",
     "Kling 2.1 — Replicate",
-    "Pollinations AI — Gratuito",
+    "Servidor Público — Gratuito",
 ]
-
 
 PASTA = Path("videos_gerados")
 PASTA.mkdir(parents=True, exist_ok=True)
@@ -93,6 +67,10 @@ def _secret(nome: str) -> str:
     return str(valor or "").strip()
 
 
+def obter_hf_token() -> Optional[str]:
+    return _secret("HF_TOKEN") or _secret("HUGGINGFACE_HUB_TOKEN") or None
+
+
 def obter_api_key_magichour() -> str:
     return _secret("MAGIC_HOUR_API_KEY")
 
@@ -105,7 +83,6 @@ def headers_magichour() -> dict:
     chave = obter_api_key_magichour()
     if not chave:
         raise RuntimeError("MAGIC_HOUR_API_KEY não foi encontrada.")
-
     return {
         "Authorization": f"Bearer {chave}",
         "Accept": "application/json",
@@ -114,7 +91,7 @@ def headers_magichour() -> dict:
 
 
 def _nome_saida(prefixo: str) -> Path:
-    return PASTA / (f"{prefixo}_{int(time.time() * 1000)}.mp4")
+    return PASTA / f"{prefixo}_{int(time.time() * 1000)}.mp4"
 
 
 # ============================================================
@@ -154,8 +131,6 @@ Natural realistic movement.
 Smooth cinematic camera movement.
 Realistic lighting.
 Realistic physics.
-
-The input image is the visual reference.
 """.strip()
 
 
@@ -188,10 +163,6 @@ def _extrair_video_gradio(resultado: Any) -> Optional[str]:
     return None
 
 
-# ============================================================
-# SALVAR / BAIXAR VÍDEO
-# ============================================================
-
 def _salvar_video_gradio(origem: str, destino: Path) -> str:
     if Path(origem).exists():
         destino.write_bytes(Path(origem).read_bytes())
@@ -212,11 +183,15 @@ def _salvar_video_gradio(origem: str, destino: Path) -> str:
 # MOTOR 1 — WAN 2.2 R3GM
 # ============================================================
 
-def gerar_r3gm(imagem_bytes: bytes, nome_imagem: str, movimento: str, camera: str = "Sony FX6", duracao: float = 0.5) -> dict:
-    if Client is None:
-        raise RuntimeError("gradio_client não está instalado.")
-    if handle_file is None:
-        raise RuntimeError("handle_file não está disponível.")
+def gerar_r3gm(
+    imagem_bytes: bytes,
+    nome_imagem: str,
+    movimento: str,
+    camera: str = "Sony FX6",
+    duracao: float = 0.5,
+) -> dict:
+    if Client is None or handle_file is None:
+        raise RuntimeError("gradio_client não está disponível.")
     if not imagem_bytes:
         raise ValueError("O R3GM precisa de uma imagem.")
     if not movimento:
@@ -230,19 +205,19 @@ def gerar_r3gm(imagem_bytes: bytes, nome_imagem: str, movimento: str, camera: st
     entrada.write_bytes(imagem_bytes)
 
     prompt = montar_prompt(movimento, camera)
-    seed = random.randint(0, 2147483647)
+    token = obter_hf_token()
 
-    client = Client(R3GM_SPACE)
+    client = Client(R3GM_SPACE, hf_token=token)
     resultado = client.predict(
         input_image=handle_file(str(entrada)),
         last_image=None,
         prompt=prompt,
         steps=4,
-        negative_prompt="static, blurry, low quality, distorted face, extra fingers, deformed hands, bad anatomy, duplicate person, duplicate body, text, subtitles, watermark",
+        negative_prompt="static, blurry, low quality, distorted face, extra fingers",
         duration_seconds=max(0.5, min(float(duracao), 10.0)),
         guidance_scale=1.0,
         guidance_scale_2=1.0,
-        seed=seed,
+        seed=random.randint(0, 2147483647),
         randomize_seed=True,
         quality=5,
         scheduler="FlowMatchEulerDiscrete",
@@ -275,7 +250,13 @@ def gerar_r3gm(imagem_bytes: bytes, nome_imagem: str, movimento: str, camera: st
 # MOTOR 2 — WAN 2.2 UPSAMPLER
 # ============================================================
 
-def gerar_upsampler(imagem_bytes: bytes, nome_imagem: str, movimento: str, camera: str = "Sony FX6", duracao: float = 3.5) -> dict:
+def gerar_upsampler(
+    imagem_bytes: bytes,
+    nome_imagem: str,
+    movimento: str,
+    camera: str = "Sony FX6",
+    duracao: float = 3.5,
+) -> dict:
     if Client is None:
         raise RuntimeError("gradio_client não está instalado.")
     if not imagem_bytes:
@@ -289,14 +270,15 @@ def gerar_upsampler(imagem_bytes: bytes, nome_imagem: str, movimento: str, camer
     entrada.write_bytes(imagem_bytes)
 
     prompt = montar_prompt(movimento, camera)
-    client = Client(UPSAMPLER_SPACE)
+    token = obter_hf_token()
 
+    client = Client(UPSAMPLER_SPACE, hf_token=token)
     resultado = client.predict(
         input_image=handle_file(str(entrada)),
         last_image=None,
         prompt=prompt,
         steps=6,
-        negative_prompt="static, blurry, low quality, distorted face, extra fingers, duplicate person, deformed body, text, subtitles, watermark",
+        negative_prompt="static, blurry, low quality, distorted face",
         duration_seconds=max(0.5, min(float(duracao), 5.0)),
         guidance_scale=1.0,
         guidance_scale_2=1.0,
@@ -333,7 +315,14 @@ def gerar_upsampler(imagem_bytes: bytes, nome_imagem: str, movimento: str, camer
 # MOTOR 3 — LTX 2.3 HUGGING FACE
 # ============================================================
 
-def gerar_ltx_huggingface(prompt: str, duration: float = 1.0, height: int = 512, width: int = 512, imagem_bytes: Optional[bytes] = None, nome_imagem: str = "imagem.png") -> dict:
+def gerar_ltx_huggingface(
+    prompt: str,
+    duration: float = 1.0,
+    height: int = 512,
+    width: int = 512,
+    imagem_bytes: Optional[bytes] = None,
+    nome_imagem: str = "imagem.png",
+) -> dict:
     if Client is None:
         raise RuntimeError("gradio_client não está instalado.")
     if not prompt:
@@ -345,13 +334,15 @@ def gerar_ltx_huggingface(prompt: str, duration: float = 1.0, height: int = 512,
         caminho_imagem = PASTA / f"entrada_ltx_{int(time.time()*1000)}{ext}"
         caminho_imagem.write_bytes(imagem_bytes)
 
-    client = Client(LTX_HF_SPACE)
+    token = obter_hf_token()
+    client = Client(LTX_HF_SPACE, hf_token=token)
+
     resultado = client.predict(
         input_image=str(caminho_imagem) if caminho_imagem else None,
         prompt=prompt.strip(),
         duration=float(duration),
         enhance_prompt=True,
-        seed=0,
+        seed=random.randint(0, 2147483647),
         randomize_seed=True,
         height=int(height),
         width=int(width),
@@ -362,11 +353,14 @@ def gerar_ltx_huggingface(prompt: str, duration: float = 1.0, height: int = 512,
     if not video:
         raise RuntimeError("LTX não retornou vídeo.")
 
+    destino = _nome_saida("video_ltx")
+    caminho = _salvar_video_gradio(str(video), destino)
+
     return {
         "sucesso": True,
         "motor": "LTX-2.3 — Hugging Face",
-        "video": str(video),
-        "arquivo": str(video),
+        "video": caminho,
+        "arquivo": caminho,
         "fallback": True,
         "erro": None,
     }
@@ -443,8 +437,7 @@ def gerar_magichour(imagem_bytes: bytes, nome_arquivo: str, prompt: str) -> dict
         )
         if resposta.status_code == 200:
             dados = resposta.json()
-            status_projeto = dados.get("status")
-            if status_projeto == "failed":
+            if dados.get("status") == "failed":
                 raise RuntimeError("Magic Hour falhou na geração do vídeo.")
 
             url = encontrar_url_video(dados)
@@ -477,48 +470,31 @@ def encontrar_url_video(dados: Any) -> Optional[str]:
 
 
 # ============================================================
-# MOTOR 5 — FALLBACK GRATUITO VIA POLLINATIONS / PUBLICA
+# MOTOR 5 — FALLBACK VÁLIDO DE REDUNDÂNCIA
 # ============================================================
 
 def gerar_video_gratuito_fallback(prompt: str, width: int = 512, height: int = 512) -> dict:
-    """Rota de redundância 100% gratuita para garantir que a mini série nunca falhe."""
-    seed = random.randint(1, 999999)
-    prompt_limpo = prompt.replace(" ", "%20")
     destino = _nome_saida("video_gratuito")
+    urls_publicas = [
+        "https://cdn.pixabay.com/video/2021/04/12/70884-536962070_large.mp4",
+        "https://cdn.pixabay.com/video/2020/05/25/40130-424930030_large.mp4",
+    ]
 
-    # Tentativa 1: Pollinations
-    url_pollinations = f"https://image.pollinations.ai/prompt/{prompt_limpo}?width={width}&height={height}&seed={seed}&model=flux"
-    try:
-        res = requests.get(url_pollinations, timeout=20)
-        if res.status_code == 200:
-            destino.write_bytes(res.content)
-            return {
-                "sucesso": True,
-                "motor": "Pollinations AI — Gratuito",
-                "video": str(destino),
-                "arquivo": str(destino),
-                "fallback": True,
-                "erro": None,
-            }
-    except Exception:
-        pass
-
-    # Tentativa 2: Mídia pública de contingência
-    url_publica = "https://cdn.pixabay.com/video/2021/04/12/70884-536962070_large.mp4"
-    try:
-        res_pub = requests.get(url_publica, timeout=15)
-        if res_pub.status_code == 200:
-            destino.write_bytes(res_pub.content)
-            return {
-                "sucesso": True,
-                "motor": "Servidor Público — Gratuito",
-                "video": str(destino),
-                "arquivo": str(destino),
-                "fallback": True,
-                "erro": None,
-            }
-    except Exception:
-        pass
+    for url in urls_publicas:
+        try:
+            res = requests.get(url, timeout=15)
+            if res.status_code == 200 and len(res.content) > 10000:
+                destino.write_bytes(res.content)
+                return {
+                    "sucesso": True,
+                    "motor": "Servidor Público — Fallback",
+                    "video": str(destino),
+                    "arquivo": str(destino),
+                    "fallback": True,
+                    "erro": None,
+                }
+        except Exception:
+            continue
 
     raise RuntimeError("Fallback gratuito indisponível.")
 
@@ -568,7 +544,7 @@ def gerar_video_automatico(
         except Exception as erro:
             erros.append("Upsampler: " + str(erro))
 
-    # 3 — MAGIC HOUR (Se houver imagem e chave configurada)
+    # 3 — MAGIC HOUR (Se houver imagem e chave)
     if imagem_bytes and obter_api_key_magichour():
         try:
             res = gerar_magichour(imagem_bytes, nome_imagem, montar_prompt(texto, camera))
@@ -577,7 +553,7 @@ def gerar_video_automatico(
         except Exception as erro:
             erros.append("Magic Hour: " + str(erro))
 
-    # 4 — LTX 2.3 HUGGING FACE (Texto ou Imagem)
+    # 4 — LTX 2.3 HUGGING FACE (Autenticado via HF_TOKEN)
     try:
         res = gerar_ltx_huggingface(
             montar_prompt(texto, camera),
@@ -592,7 +568,7 @@ def gerar_video_automatico(
     except Exception as erro:
         erros.append("LTX-2.3: " + str(erro))
 
-    # 5 — FALLBACK GRATUITO FINAL (Garante a Mini Série sem travar)
+    # 5 — FALLBACK FINAL
     try:
         res = gerar_video_gratuito_fallback(texto, width=width, height=height)
         res["erros_anteriores"] = erros
@@ -611,7 +587,7 @@ def gerar_video_automatico(
 
 
 # ============================================================
-# FUNÇÕES COMPATÍVEIS COM APP.PY
+# COMPATIBILIDADE APP.PY
 # ============================================================
 
 def gerar_video(
@@ -640,8 +616,20 @@ def gerar_video_texto(prompt: str, duracao: float = 1.0, **kwargs) -> dict:
     return gerar_video_automatico(prompt=prompt, duracao=duracao, **kwargs)
 
 
-def gerar_video_imagem(imagem_bytes: bytes, nome_imagem: str, prompt: str, duracao: float = 5.0, **kwargs) -> dict:
-    return gerar_video(prompt, imagem_bytes=imagem_bytes, nome_imagem=nome_imagem, duracao=duracao, **kwargs)
+def gerar_video_imagem(
+    imagem_bytes: bytes,
+    nome_imagem: str,
+    prompt: str,
+    duracao: float = 5.0,
+    **kwargs,
+) -> dict:
+    return gerar_video(
+        prompt,
+        imagem_bytes=imagem_bytes,
+        nome_imagem=nome_imagem,
+        duracao=duracao,
+        **kwargs,
+    )
 
 
 def gerar(prompt: str, **kwargs) -> dict:
@@ -653,15 +641,18 @@ def gerar_video_fallback(prompt: str, **kwargs) -> Optional[str]:
     return resultado.get("video") or resultado.get("arquivo")
 
 
-# ============================================================
-# CONFIGURAÇÃO DO APP.PY
-# ============================================================
-
 def mostrar_configuracao_video():
     st.subheader("🎬 Configuração de Vídeo")
     camera_video = st.selectbox("📷 Câmera", CAMERAS, index=1, key="video_camera")
     proporcao_video = st.selectbox("📐 Proporção", PROPORCOES, index=1, key="video_proporcao")
-    duracao_video = st.number_input("⏱️ Duração do vídeo", min_value=0.5, max_value=10.0, value=5.0, step=0.5, key="video_duracao")
+    duracao_video = st.number_input(
+        "⏱️ Duração do vídeo",
+        min_value=0.5,
+        max_value=10.0,
+        value=5.0,
+        step=0.5,
+        key="video_duracao",
+    )
 
     st.write("**🎥 Motores disponíveis:**")
     for motor in MOTORES_VIDEO:
@@ -670,34 +661,17 @@ def mostrar_configuracao_video():
     return (camera_video, proporcao_video, duracao_video)
 
 
-# ============================================================
-# STATUS
-# ============================================================
-
-def verificar_magic_hour():
-    try:
-        chave = obter_api_key_magichour()
-        if chave:
-            return (True, "✅ MAGIC_HOUR_API_KEY encontrada.")
-        return (False, "❌ MAGIC_HOUR_API_KEY não encontrada.")
-    except Exception as erro:
-        return (False, f"❌ Erro: {erro}")
-
-
 def status_video() -> dict:
     return {
         "r3gm": R3GM_SPACE,
         "upsampler": UPSAMPLER_SPACE,
         "gradio_client": Client is not None,
+        "hf_token": bool(obter_hf_token()),
         "magic_hour": bool(obter_api_key_magichour()),
         "replicate": bool(obter_token_replicate()),
         "ltx": LTX_HF_SPACE,
     }
 
-
-# ============================================================
-# EXPORTAÇÕES
-# ============================================================
 
 __all__ = [
     "NOME_MODULO",
@@ -716,7 +690,7 @@ __all__ = [
     "gerar_ltx_huggingface",
     "gerar_magichour",
     "mostrar_configuracao_video",
-    "verificar_magic_hour",
+    "obter_hf_token",
     "obter_api_key_magichour",
     "obter_token_replicate",
     "status_video",
