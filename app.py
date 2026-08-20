@@ -1,5 +1,5 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + CONTROLES NO RODAPÉ
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + CONTROLES FIXOS NO RODAPÉ
 # Criado por: Geovani
 # ============================================================
 
@@ -75,7 +75,7 @@ if cliente is None:
 
 
 # ============================================================
-# 🖼️ FUNDO & CSS
+# 🖼️ FUNDO & CSS FIXO
 # ============================================================
 
 def imagem_fundo_css():
@@ -111,7 +111,7 @@ st.markdown(
     .main .block-container {{
         max-width: 980px;
         padding-top: 1.5rem;
-        padding-bottom: 2rem;
+        padding-bottom: 140px !important; /* Dá espaço para os botões fixos não cobrirem o chat */
     }}
 
     /* Ocultar avatares */
@@ -132,10 +132,26 @@ st.markdown(
         gap: 0px !important;
     }}
 
-    /* Estilo dos Botões do Rodapé */
+    /* FIXA A BARRA DE BOTÕES NO RODAPÉ (EXATAMENTE ACIMA DO CHAT INPUT) */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {{
+        position: fixed !important;
+        bottom: 75px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        width: 90% !important;
+        max-width: 980px !important;
+        z-index: 9999 !important;
+        background: rgba(12, 22, 36, 0.90) !important;
+        padding: 8px 12px !important;
+        border-radius: 14px !important;
+        border: 1px solid rgba(130, 210, 255, 0.25) !important;
+        backdrop-filter: blur(10px) !important;
+    }}
+
+    /* Estilo interno dos botões Popover */
     div[data-testid="stPopover"] > button {{
-        background: rgba(12, 22, 36, 0.9) !important;
-        border: 1px solid rgba(130, 210, 255, 0.3) !important;
+        background: rgba(0, 132, 255, 0.2) !important;
+        border: 1px solid rgba(130, 210, 255, 0.4) !important;
         color: #00d2ff !important;
         font-weight: bold !important;
         border-radius: 8px !important;
@@ -207,7 +223,7 @@ for mensagem in st.session_state.mensagens:
                 mostrar_audio(texto)
 
 # ============================================================
-# 🛠️ PAINEL DE FERRAMENTAS ATIVAS
+# 🛠️ PAINEL DE FERRAMENTAS ATIVAS (EXPANDER)
 # ============================================================
 
 if st.session_state.ferramenta_ativa:
@@ -231,14 +247,10 @@ if st.session_state.ferramenta_ativa:
             st.rerun()
 
 # ============================================================
-# 🧰 BARRA DE ENTRADA + BOTÕES NO RODAPÉ
+# 🧰 BARRA DE FERRAMENTAS FIXA NO RODAPÉ
 # ============================================================
 
-# Caixinha de texto principal
-pergunta = st.chat_input("Digite sua mensagem para a Alex...")
-
-# Botões posicionados LOGO ABAIXO da caixinha de digitação
-col_menu, col_video_cfg = st.columns([1, 1.5])
+col_menu, col_video_cfg = st.columns([1, 1.2])
 
 with col_menu:
     with st.popover("➕ Ferramentas"):
@@ -282,8 +294,10 @@ with col_video_cfg:
         )
 
 # ============================================================
-# 💬 PROCESSAMENTO DA MENSAGEM
+# 💬 ENTRADA DO CHAT (RODAPÉ)
 # ============================================================
+
+pergunta = st.chat_input("Digite sua mensagem para Alex...")
 
 if pergunta:
     pergunta_limpa = pergunta.strip()
@@ -411,4 +425,4 @@ if pergunta:
 
         except Exception as erro:
             st.error(f"❌ Erro ao conversar com a Alex: {erro}")
-            
+                    
