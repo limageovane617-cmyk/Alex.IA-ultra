@@ -189,5 +189,5 @@ REGRAS DE EXECUÇÃO OBRIGATÓRIA:
             "tipo": "texto",
             "texto": f"⚠️ Ocorreu um erro no processamento: {str(e)}",
             "arquivo": None
-                }
-        
+    }
+    
