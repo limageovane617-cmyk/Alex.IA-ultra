@@ -22,7 +22,7 @@ st.set_page_config(
 )
 
 # ============================================================
-# 📦 IMPORTAÇÕES DO PROJETO
+# 📦 IMPORTAÇÕES DO PROJETO & LIGAÇÕES DE MÍDIA
 # ============================================================
 
 if "gerenciador_imagem" in sys.modules:
@@ -30,13 +30,18 @@ if "gerenciador_imagem" in sys.modules:
 else:
     import gerenciador_imagem
 
+try:
+    import video
+except ImportError:
+    video = None
+
 from config_ultra import AI_NAME, CREATOR_NAME, GEMINI_MODEL, SYSTEM_PROMPT
 from core.brain import processar_resposta_alex
 from servicos import criar_cliente_gemini, verificar_servicos
 from voz import mostrar_audio
 
 # ============================================================
-# 🛠️ FUNÇÃO AUXILIAR DE VALIDAÇÃO DE MÍDIA (ADICIONADA)
+# 🛠️ FUNÇÃO AUXILIAR DE VALIDAÇÃO DE MÍDIA
 # ============================================================
 
 def midia_valida(caminho):
@@ -309,7 +314,7 @@ with col_video_cfg:
         )
 
 # ============================================================
-# 💬 ENTRADA DO CHAT COM AUTONOMIA NATIVA (CORE/BRAIN)
+# 💬 ENTRADA DO CHAT COM AUTONOMIA NATIVA + LIGAÇÃO DE EMERGÊNCIA
 # ============================================================
 
 pergunta = st.chat_input("Digite sua mensagem para Alex...")
@@ -339,6 +344,38 @@ if pergunta:
                 mensagem_usuario=pergunta_limpa,
                 config_video=config_vid,
             )
+
+            # 🔗 LIGAÇÃO DE SEGURANÇA: SE A IA NÃO EXECUTOU A FERRAMENTA, FORÇA A GERAÇÃO
+            msg_low = pergunta_limpa.lower()
+
+            # 1. Força vídeo se a palavra chave for detectada e não retornou vídeo
+            if ("video" in msg_low or "vídeo" in msg_low) and any(w in msg_low for w in ["gera", "cria", "faça", "faz"]):
+                if resultado.get("tipo") != "video" and video and hasattr(video, "gerar_video"):
+                    try:
+                        res_v = video.gerar_video(
+                            prompt=pergunta_limpa,
+                            duracao=st.session_state.video_duracao,
+                            proporcao=st.session_state.video_proporcao,
+                        )
+                        if res_v and res_v.get("arquivo"):
+                            resultado["tipo"] = "video"
+                            resultado["arquivo"] = res_v["arquivo"]
+                            resultado["texto"] = f"Aqui está o vídeo que você pediu!"
+                    except Exception:
+                        pass
+
+            # 2. Força imagem se a palavra chave for detectada e não retornou imagem
+            elif ("imagem" in msg_low or "foto" in msg_low or "desenho" in msg_low) and any(w in msg_low for w in ["gera", "cria", "faça", "faz"]):
+                if resultado.get("tipo") != "imagem" and hasattr(gerenciador_imagem, "gerar_imagem"):
+                    try:
+                        res_i = gerenciador_imagem.gerar_imagem(prompt=pergunta_limpa)
+                        caminho_i = res_i.get("arquivo") if isinstance(res_i, dict) else res_i
+                        if caminho_i:
+                            resultado["tipo"] = "imagem"
+                            resultado["arquivo"] = caminho_i
+                            resultado["texto"] = f"Aqui está a imagem que você pediu!"
+                    except Exception:
+                        pass
 
             # Renderiza Imagem
             if resultado.get("tipo") == "imagem" and midia_valida(resultado.get("arquivo")):
@@ -375,4 +412,3 @@ if pergunta:
             })
 
     st.rerun()
-            
