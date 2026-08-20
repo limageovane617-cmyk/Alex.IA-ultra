@@ -1,5 +1,5 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (BOTÕES ALINHADOS)
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (LAYOUT CORRIGIDO)
 # Criado por: Geovani
 # ============================================================
 
@@ -50,7 +50,6 @@ if "mensagens" not in st.session_state:
 if "ferramenta_ativa" not in st.session_state:
     st.session_state.ferramenta_ativa = None
 
-# Configurações padrão de vídeo
 if "video_duracao" not in st.session_state:
     st.session_state.video_duracao = 5
 
@@ -75,7 +74,7 @@ if cliente is None:
 
 
 # ============================================================
-# 🖼️ FUNDO & CSS LIMPO
+# 🖼️ FUNDO & CSS DE LAYOUT
 # ============================================================
 
 def imagem_fundo_css():
@@ -110,8 +109,8 @@ st.markdown(
 
     .main .block-container {{
         max-width: 980px;
-        padding-top: 1.5rem;
-        padding-bottom: 20px !important;
+        padding-top: 1rem;
+        padding-bottom: 120px !important;
     }}
 
     /* Ocultar avatares */
@@ -132,17 +131,25 @@ st.markdown(
         gap: 0px !important;
     }}
 
-    /* ESTILO COMPACTO DOS BOTÕES DE AÇÃO */
+    /* FORÇAR COLUNAS LADO A LADO NO MOBILE SEM EMPILHAR */
+    [data-testid="stHorizontalBlock"] {{
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }}
+
+    /* BOTÕES CIRCULARES LIMPOS */
     div[data-testid="stPopover"] > button {{
-        background: rgba(12, 22, 36, 0.88) !important;
+        background: rgba(12, 22, 36, 0.90) !important;
         border: 1px solid rgba(0, 210, 255, 0.4) !important;
         color: #00d2ff !important;
         font-size: 1.1rem !important;
         font-weight: bold !important;
         border-radius: 50% !important;
-        width: 42px !important;
-        height: 42px !important;
-        min-width: 42px !important;
+        width: 40px !important;
+        height: 40px !important;
+        min-width: 40px !important;
         padding: 0 !important;
         display: flex !important;
         align-items: center !important;
@@ -156,12 +163,81 @@ st.markdown(
 )
 
 # ============================================================
-# 🤖 CABEÇALHO LIMPO
+# 🤖 CABEÇALHO COM A BARRA DE FERRAMENTAS INTEGRADA
 # ============================================================
 
-st.markdown(f"## 🤖 {AI_NAME}")
+col_titulo, col_menu, col_video = st.columns([0.7, 0.15, 0.15])
+
+with col_titulo:
+    st.markdown(f"### 🤖 {AI_NAME}")
+
+with col_menu:
+    with st.popover("➕"):
+        st.subheader("🧰 Ferramentas da Ultra")
+
+        if st.button("💻 Código", use_container_width=True):
+            st.session_state.ferramenta_ativa = "codigo"
+
+        if st.button("📎 Arquivo", use_container_width=True):
+            st.session_state.ferramenta_ativa = "arquivo"
+
+        if st.button("🎭 Personagem", use_container_width=True):
+            st.session_state.ferramenta_ativa = "personagem"
+
+        if st.button("🧠 Memória", use_container_width=True):
+            st.session_state.ferramenta_ativa = "memoria"
+
+        st.divider()
+
+        if st.button("🗑️ Limpar chat", use_container_width=True):
+            st.session_state.mensagens = []
+            st.session_state.ferramenta_ativa = None
+            st.rerun()
+
+with col_video:
+    with st.popover("🎬"):
+        st.subheader("⚙️ Configurar Vídeo Automático")
+
+        st.session_state.video_duracao = st.slider(
+            "Duração (Segundos):",
+            min_value=2,
+            max_value=15,
+            value=st.session_state.video_duracao,
+            step=1,
+        )
+
+        st.session_state.video_proporcao = st.selectbox(
+            "Proporção:",
+            options=["16:9", "9:16", "1:1"],
+            index=0,
+        )
+
 st.caption(f"Criada por {CREATOR_NAME} • inteligência artificial pessoal")
 st.divider()
+
+# ============================================================
+# 🛠️ PAINEL DE FERRAMENTAS ATIVAS
+# ============================================================
+
+if st.session_state.ferramenta_ativa:
+    ferramenta = st.session_state.ferramenta_ativa
+
+    with st.expander(f"🛠️ Módulo Ativo: {ferramenta.capitalize()}", expanded=True):
+        if ferramenta == "codigo":
+            st.info("💻 Envie seu código ou dúvida de programação direto no chat.")
+
+        elif ferramenta == "arquivo":
+            st.file_uploader("Envie um arquivo para a Alex analisar:")
+
+        elif ferramenta == "personagem":
+            st.info("🎭 A personalidade da Alex está configurada em tom natural.")
+
+        elif ferramenta == "memoria":
+            st.info("🧠 Memória do sistema sincronizada.")
+
+        if st.button("Fechar Módulo"):
+            st.session_state.ferramenta_ativa = None
+            st.rerun()
 
 # ============================================================
 # 💬 HISTÓRICO DE MENSAGENS
@@ -216,77 +292,6 @@ for mensagem in st.session_state.mensagens:
                     mostrar_audio(texto)
                 except Exception:
                     pass
-
-# ============================================================
-# 🛠️ PAINEL DE FERRAMENTAS ATIVAS
-# ============================================================
-
-if st.session_state.ferramenta_ativa:
-    ferramenta = st.session_state.ferramenta_ativa
-
-    with st.expander(f"🛠️ Módulo Ativo: {ferramenta.capitalize()}", expanded=True):
-        if ferramenta == "codigo":
-            st.info("💻 Envie seu código ou dúvida de programação direto no chat.")
-
-        elif ferramenta == "arquivo":
-            st.file_uploader("Envie um arquivo para a Alex analisar:")
-
-        elif ferramenta == "personagem":
-            st.info("🎭 A personalidade da Alex está configurada em tom natural.")
-
-        elif ferramenta == "memoria":
-            st.info("🧠 Memória do sistema sincronizada.")
-
-        if st.button("Fechar Módulo"):
-            st.session_state.ferramenta_ativa = None
-            st.rerun()
-
-# ============================================================
-# 🧰 ÍCONES LADO A LADO (SEM ATROPELAR CONTEÚDO)
-# ============================================================
-
-col_menu, col_video_cfg, _ = st.columns([0.1, 0.1, 0.8])
-
-with col_menu:
-    with st.popover("➕"):
-        st.subheader("🧰 Ferramentas da Ultra")
-
-        if st.button("💻 Código", use_container_width=True):
-            st.session_state.ferramenta_ativa = "codigo"
-
-        if st.button("📎 Arquivo", use_container_width=True):
-            st.session_state.ferramenta_ativa = "arquivo"
-
-        if st.button("🎭 Personagem", use_container_width=True):
-            st.session_state.ferramenta_ativa = "personagem"
-
-        if st.button("🧠 Memória", use_container_width=True):
-            st.session_state.ferramenta_ativa = "memoria"
-
-        st.divider()
-
-        if st.button("🗑️ Limpar chat", use_container_width=True):
-            st.session_state.mensagens = []
-            st.session_state.ferramenta_ativa = None
-            st.rerun()
-
-with col_video_cfg:
-    with st.popover("🎬"):
-        st.subheader("⚙️ Configurar Vídeo Automático")
-
-        st.session_state.video_duracao = st.slider(
-            "Duração (Segundos):",
-            min_value=2,
-            max_value=15,
-            value=st.session_state.video_duracao,
-            step=1,
-        )
-
-        st.session_state.video_proporcao = st.selectbox(
-            "Proporção:",
-            options=["16:9", "9:16", "1:1"],
-            index=0,
-        )
 
 # ============================================================
 # 💬 ENTRADA DO CHAT
@@ -397,7 +402,7 @@ if pergunta:
         try:
             with st.chat_message("assistant"):
                 with st.spinner("🤖 Alex IA está pensando..."):
-                    resposta = cliente.models.generate_content(
+                    resposta = cliente.models.generatecontent(
                         model=GEMINI_MODEL, contents=instrucao
                     )
 
