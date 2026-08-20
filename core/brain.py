@@ -1,20 +1,20 @@
 # ============================================================
 # 🧠 CORE / BRAIN.PY — CÉREBRO DA ALEX IA ULTRA
-# Gerencia Function Calling e autonomia do modelo (Com Vídeos em Lote)
+# Gerencia Function Calling e autonomia do modelo (Ajustado)
 # ============================================================
 
 from concurrent.futures import ThreadPoolExecutor
 from google.genai import types
 
 # ------------------------------------------------------------
-# 1. DEFINIÇÃO DAS FERRAMENTAS QUE A ALEX PODE CHAMAR
+# 1. DEFINIÇÃO DAS FERRAMENTAS
 # ------------------------------------------------------------
 
 def ferramenta_gerar_imagem(prompt: str) -> dict:
     """Gera uma imagem digital ou fotografia realista com base em uma descrição visual detalhada.
     
     Args:
-        prompt: Descrição detalhada e criativa da imagem a ser gerada.
+        prompt: Descrição detalhada da imagem a ser gerada.
     """
     from gerenciador_imagem import mostrar_imagem
     import streamlit as st
@@ -31,12 +31,12 @@ def ferramenta_gerar_imagem(prompt: str) -> dict:
 
 
 def ferramenta_gerar_video(prompt: str, duracao: int = 5, proporcao: str = "16:9") -> dict:
-    """Gera um único vídeo curto a partir de uma descrição textual de cena.
+    """Gera um único vídeo curto a partir de uma descrição textual.
     
     Args:
-        prompt: Descrição da cena, ação e movimento de câmera do vídeo.
-        duracao: Tempo em segundos do vídeo (padrão 5s).
-        proporcao: Formato do vídeo (16:9, 9:16 ou 1:1).
+        prompt: Descrição da cena ou ação do vídeo.
+        duracao: Tempo em segundos (padrão 5).
+        proporcao: Formato (16:9, 9:16 ou 1:1).
     """
     import video
     
@@ -60,19 +60,19 @@ def ferramenta_gerar_video(prompt: str, duracao: int = 5, proporcao: str = "16:9
     return {"sucesso": False, "erro": "Falha na geração do vídeo."}
 
 
-def ferramenta_gerar_multiplos_videos(prompts: list[str], duracao: int = 5, proporcao: str = "16:9") -> dict:
-    """Gera uma lista com vários vídeos de forma paralela/assíncrona a partir de múltiplas descrições.
+def ferramenta_gerar_multiplos_videos(prompts: list, duracao: int = 5, proporcao: str = "16:9") -> dict:
+    """Gera múltiplos vídeos em lote a partir de uma lista de descrições.
     
     Args:
-        prompts: Lista de descrições textuais (uma para cada vídeo desejado).
-        duracao: Duração de cada vídeo em segundos.
+        prompts: Lista de descrições de texto para cada vídeo.
+        duracao: Tempo em segundos de cada vídeo.
         proporcao: Formato dos vídeos (16:9, 9:16 ou 1:1).
     """
     import video
 
     def processar_um_video(p):
         res = video.gerar_video(
-            descricao=p,
+            descricao=str(p),
             camera="Sony FX6",
             proporcao=proporcao,
             duracao=duracao,
@@ -80,12 +80,11 @@ def ferramenta_gerar_multiplos_videos(prompts: list[str], duracao: int = 5, prop
             height=512
         )
         if isinstance(res, dict) and res.get("sucesso"):
-            return {"prompt": p, "arquivo": res.get("video"), "sucesso": True}
-        return {"prompt": p, "arquivo": None, "sucesso": False}
+            return {"prompt": str(p), "arquivo": res.get("video"), "sucesso": True}
+        return {"prompt": str(p), "arquivo": None, "sucesso": False}
 
-    # Processa até 3 vídeos em paralelo para acelerar sem estourar limite
     resultados = []
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    with ThreadPoolExecutor(max_workers=2) as executor:
         resultados = list(executor.map(processar_um_video, prompts))
 
     videos_gerados = [r for r in resultados if r["sucesso"]]
@@ -97,7 +96,6 @@ def ferramenta_gerar_multiplos_videos(prompts: list[str], duracao: int = 5, prop
         "total": len(videos_gerados)
     }
 
-# Lista de funções expostas nativamente para o Gemini
 LISTA_FERRAMENTAS = [
     ferramenta_gerar_imagem, 
     ferramenta_gerar_video, 
@@ -105,26 +103,26 @@ LISTA_FERRAMENTAS = [
 ]
 
 # ------------------------------------------------------------
-# 2. PROCESSADOR DE MENSAGENS COM AUTONOMIA NATIVA
+# 2. PROCESSADOR DE MENSAGENS
 # ------------------------------------------------------------
 
 def processar_resposta_alex(cliente, modelo_id: str, prompt_sistema: str, historico: list, mensagem_usuario: str, config_video: dict) -> dict:
-    """Envia a mensagem ao Gemini com Function Calling ativo."""
     duracao_pref = config_video.get("duracao", 5)
     proporcao_pref = config_video.get("proporcao", "16:9")
     
     instrucao_completa = f"""{prompt_sistema}
 
-Você possui ferramentas nativas para criar imagens, vídeos individuais e múltiplos vídeos simultâneos.
-Quando o usuário pedir 2 ou mais vídeos (ex: "crie 3 vídeos de...", "gera vídeos sobre X, Y e Z"), use 'ferramenta_gerar_multiplos_videos'.
-Preferências de vídeo: Duração {duracao_pref}s, Proporção {proporcao_pref}.
-Responda sempre em português do Brasil de forma amigável e precisa.
+VOCÊ É UMA IA AUTÔNOMA E DEVE SEMPRE USAR AS FERRAMENTAS DISPONÍVEIS QUANDO SOLICITADO.
+- Nunca diga que está com falha temporária sem tentar acionar a ferramenta primeiro.
+- Quando o usuário pedir 2 ou mais vídeos, acione OBRIGATORIAMENTE 'ferramenta_gerar_multiplos_videos' passando a lista de descrições.
+- Quando pedir 1 vídeo, chame 'ferramenta_gerar_video'.
+- Preferências de vídeo: Duração {duracao_pref}s, Proporção {proporcao_pref}.
 """
 
     config_geracao = types.GenerateContentConfig(
         system_instruction=instrucao_completa,
         tools=LISTA_FERRAMENTAS,
-        temperature=0.7,
+        temperature=0.2,
     )
 
     resposta = cliente.models.generate_content(
@@ -143,7 +141,7 @@ Responda sempre em português do Brasil de forma amigável e precisa.
             res = ferramenta_gerar_imagem(prompt)
             return {
                 "tipo": "imagem",
-                "texto": f"🖼️ Aqui está a imagem gerada sobre: **{prompt}**",
+                "texto": f"🖼️ Imagem gerada sobre: **{prompt}**",
                 "arquivo": res.get("arquivo")
             }
 
@@ -154,7 +152,7 @@ Responda sempre em português do Brasil de forma amigável e precisa.
             res = ferramenta_gerar_video(prompt, duracao, proporcao)
             return {
                 "tipo": "video",
-                "texto": f"🎬 Aqui está o vídeo gerado ({duracao}s) sobre: **{prompt}**",
+                "texto": f"🎬 Vídeo gerado ({duracao}s) sobre: **{prompt}**",
                 "arquivo": res.get("arquivo")
             }
 
@@ -166,7 +164,8 @@ Responda sempre em português do Brasil de forma amigável e precisa.
             return {
                 "tipo": "multiplos_videos",
                 "texto": f"🎬 Gerados **{res['total']} vídeos** com sucesso!",
-                "lista_videos": res.get("lista_videos", [])
+                "lista_videos": res.get("lista_videos", []),
+                "arquivo": None
             }
 
     texto_resposta = resposta.text if resposta.text else "Não consegui processar a resposta."
@@ -174,5 +173,5 @@ Responda sempre em português do Brasil de forma amigável e precisa.
         "tipo": "texto",
         "texto": texto_resposta,
         "arquivo": None
-            }
+    }
     
