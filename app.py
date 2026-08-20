@@ -1,5 +1,5 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + BOTOES REAJUSTADOS
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (BOTÕES ALINHADOS)
 # Criado por: Geovani
 # ============================================================
 
@@ -75,7 +75,7 @@ if cliente is None:
 
 
 # ============================================================
-# 🖼️ FUNDO & CSS REAJUSTADO
+# 🖼️ FUNDO & CSS LIMPO
 # ============================================================
 
 def imagem_fundo_css():
@@ -111,7 +111,7 @@ st.markdown(
     .main .block-container {{
         max-width: 980px;
         padding-top: 1.5rem;
-        padding-bottom: 160px !important;
+        padding-bottom: 20px !important;
     }}
 
     /* Ocultar avatares */
@@ -132,23 +132,7 @@ st.markdown(
         gap: 0px !important;
     }}
 
-    /* BOTÕES FLUTUANTES MAIS ALTOS E LADO A LADO */
-    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {{
-        position: fixed !important;
-        bottom: 115px !important; /* Subiu os botões para não cobrir o chat */
-        left: 20px !important;
-        z-index: 9999 !important;
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-        display: flex !important;
-        flex-direction: row !important; /* Força ficar lado a lado no celular */
-        gap: 10px !important;
-        width: auto !important;
-    }}
-
-    /* BOTÕES CIRCULARES LIMPOS */
+    /* ESTILO COMPACTO DOS BOTÕES DE AÇÃO */
     div[data-testid="stPopover"] > button {{
         background: rgba(12, 22, 36, 0.88) !important;
         border: 1px solid rgba(0, 210, 255, 0.4) !important;
@@ -258,10 +242,10 @@ if st.session_state.ferramenta_ativa:
             st.rerun()
 
 # ============================================================
-# 🧰 ÍCONES FLUTUANTES MINIMALISTAS
+# 🧰 ÍCONES LADO A LADO (SEM ATROPELAR CONTEÚDO)
 # ============================================================
 
-col_menu, col_video_cfg = st.columns([1, 1])
+col_menu, col_video_cfg, _ = st.columns([0.1, 0.1, 0.8])
 
 with col_menu:
     with st.popover("➕"):
@@ -395,7 +379,7 @@ if pergunta:
 
         st.rerun()
 
-    # 3. CONVERSA GEMINI + ÁUDIO AUTOMÁTICO TRATADO
+    # 3. CONVERSA GEMINI + ÁUDIO AUTOMÁTICO
     else:
         contexto = "\n".join(
             f"{m['role']}: {m['content']}"
@@ -424,11 +408,11 @@ if pergunta:
                     )
 
                 st.write(texto)
-                
+
                 try:
                     mostrar_audio(texto)
                 except Exception:
-                    pass  # Evita que erros de cota de voz travem o fluxo do chat
+                    pass
 
             st.session_state.mensagens.append({
                 "role": "assistant",
