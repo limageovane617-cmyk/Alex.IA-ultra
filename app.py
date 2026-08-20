@@ -1,5 +1,5 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + ÍCONES COMPACTOS
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + BOTOES REAJUSTADOS
 # Criado por: Geovani
 # ============================================================
 
@@ -75,7 +75,7 @@ if cliente is None:
 
 
 # ============================================================
-# 🖼️ FUNDO & CSS MINIMALISTA
+# 🖼️ FUNDO & CSS REAJUSTADO
 # ============================================================
 
 def imagem_fundo_css():
@@ -111,7 +111,7 @@ st.markdown(
     .main .block-container {{
         max-width: 980px;
         padding-top: 1.5rem;
-        padding-bottom: 140px !important;
+        padding-bottom: 160px !important;
     }}
 
     /* Ocultar avatares */
@@ -132,30 +132,25 @@ st.markdown(
         gap: 0px !important;
     }}
 
-    /* CONTAINER DOS ÍCONES FLUTUANTES */
+    /* BOTÕES FLUTUANTES MAIS ALTOS E LADO A LADO */
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {{
         position: fixed !important;
-        bottom: 80px !important;
-        left: calc(50% - 440px) !important;
+        bottom: 115px !important; /* Subiu os botões para não cobrir o chat */
+        left: 20px !important;
         z-index: 9999 !important;
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
         padding: 0 !important;
         display: flex !important;
+        flex-direction: row !important; /* Força ficar lado a lado no celular */
         gap: 10px !important;
         width: auto !important;
     }}
 
-    @media (max-width: 980px) {{
-        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {{
-            left: 20px !important;
-        }}
-    }}
-
-    /* BOTÕES APENAS COM ÍCONE (DESIGN CIRCULAR CLEAN) */
+    /* BOTÕES CIRCULARES LIMPOS */
     div[data-testid="stPopover"] > button {{
-        background: rgba(12, 22, 36, 0.85) !important;
+        background: rgba(12, 22, 36, 0.88) !important;
         border: 1px solid rgba(0, 210, 255, 0.4) !important;
         color: #00d2ff !important;
         font-size: 1.1rem !important;
@@ -233,7 +228,10 @@ for mensagem in st.session_state.mensagens:
                 st.write(texto)
 
             if tipo == "texto" and texto:
-                mostrar_audio(texto)
+                try:
+                    mostrar_audio(texto)
+                except Exception:
+                    pass
 
 # ============================================================
 # 🛠️ PAINEL DE FERRAMENTAS ATIVAS
@@ -260,7 +258,7 @@ if st.session_state.ferramenta_ativa:
             st.rerun()
 
 # ============================================================
-# 🧰 ÍCONES FLUTUANTES MINIMALISTAS (SEM TEXTO)
+# 🧰 ÍCONES FLUTUANTES MINIMALISTAS
 # ============================================================
 
 col_menu, col_video_cfg = st.columns([1, 1])
@@ -397,7 +395,7 @@ if pergunta:
 
         st.rerun()
 
-    # 3. CONVERSA GEMINI + ÁUDIO AUTOMÁTICO
+    # 3. CONVERSA GEMINI + ÁUDIO AUTOMÁTICO TRATADO
     else:
         contexto = "\n".join(
             f"{m['role']}: {m['content']}"
@@ -426,7 +424,11 @@ if pergunta:
                     )
 
                 st.write(texto)
-                mostrar_audio(texto)
+                
+                try:
+                    mostrar_audio(texto)
+                except Exception:
+                    pass  # Evita que erros de cota de voz travem o fluxo do chat
 
             st.session_state.mensagens.append({
                 "role": "assistant",
