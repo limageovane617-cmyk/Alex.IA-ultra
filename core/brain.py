@@ -11,12 +11,30 @@ from google.genai import types
 
 def ferramenta_gerar_imagem(prompt: str) -> dict:
     """Gera uma imagem digital ou fotografia realista a partir de um prompt."""
-    from gerenciador_imagem import mostrar_imagem
-    import streamlit as st
-    
-    sucesso = mostrar_imagem(prompt)
-    caminho = st.session_state.get("ultima_imagem_caminho") if sucesso else None
-    
+    import gerenciador_imagem
+
+    # Chama a função atualizada do gerenciador_imagem
+    if hasattr(gerenciador_imagem, "gerar_imagem"):
+        resultado = gerenciador_imagem.gerar_imagem(prompt)
+    elif hasattr(gerenciador_imagem, "gerar"):
+        resultado = gerenciador_imagem.gerar(prompt)
+    else:
+        return {"sucesso": False, "erro": "Função de imagem não encontrada."}
+
+    # Tratamento para garantir retorno compatível
+    if isinstance(resultado, dict):
+        sucesso = resultado.get("sucesso", False)
+        caminho = resultado.get("imagem") or resultado.get("arquivo")
+    elif isinstance(resultado, (tuple, list)):
+        caminho = resultado[0] if len(resultado) > 0 else None
+        sucesso = bool(caminho and str(caminho).startswith("/"))
+    elif isinstance(resultado, str):
+        caminho = resultado
+        sucesso = True
+    else:
+        caminho = None
+        sucesso = False
+
     return {
         "sucesso": sucesso,
         "tipo": "imagem",
@@ -28,23 +46,30 @@ def ferramenta_gerar_imagem(prompt: str) -> dict:
 def ferramenta_gerar_video(prompt: str, duracao: int = 5, proporcao: str = "16:9") -> dict:
     """Gera um único vídeo curto a partir de uma descrição textual."""
     import video
-    
+
     resultado = video.gerar_video(
         prompt=prompt,
         descricao=prompt,
         duracao=duracao,
         proporcao=proporcao
     )
-    
+
     if isinstance(resultado, dict) and resultado.get("sucesso"):
+        caminho = resultado.get("video") or resultado.get("arquivo")
         return {
             "sucesso": True,
             "tipo": "video",
             "prompt": prompt,
-            "arquivo": resultado.get("video") or resultado.get("arquivo")
+            "arquivo": caminho
         }
-    
-    return {"sucesso": False, "erro": "Falha na geração do vídeo."}
+
+    return {
+        "sucesso": False,
+        "tipo": "video",
+        "prompt": prompt,
+        "arquivo": None,
+        "erro": resultado.get("erro") if isinstance(resultado, dict) else "Falha na geração do vídeo."
+    }
 
 
 def ferramenta_gerar_multiplos_videos(prompts_separados_por_barra: str, duracao: int = 5, proporcao: str = "16:9") -> dict:
@@ -60,7 +85,7 @@ def ferramenta_gerar_multiplos_videos(prompts_separados_por_barra: str, duracao:
             duracao=duracao,
             proporcao=proporcao
         )
-        caminho = res.get("video") or res.get("arquivo") if isinstance(res, dict) else None
+        caminho = res.get("video") or res.get("arquivo") if isinstance(res, dict) and res.get("sucesso") else None
         if caminho:
             return {"prompt": p, "arquivo": caminho, "sucesso": True}
         return {"prompt": p, "arquivo": None, "sucesso": False}
@@ -124,7 +149,7 @@ REGRAS DE EXECUÇÃO OBRIGATÓRIA:
                 res = ferramenta_gerar_imagem(prompt)
                 return {
                     "tipo": "imagem" if res.get("sucesso") else "texto",
-                    "texto": f"🖼️ Imagem gerada: **{prompt}**" if res.get("sucesso") else "Não foi possível gerar a imagem.",
+                    "texto": f"🖼️ Imagem gerada: **{prompt}**" if res.get("sucesso") else "⚠️ Não foi possível gerar a imagem.",
                     "arquivo": res.get("arquivo")
                 }
 
@@ -164,5 +189,5 @@ REGRAS DE EXECUÇÃO OBRIGATÓRIA:
             "tipo": "texto",
             "texto": f"⚠️ Ocorreu um erro no processamento: {str(e)}",
             "arquivo": None
-        }
+                }
         
