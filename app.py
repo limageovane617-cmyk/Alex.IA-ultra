@@ -1,5 +1,5 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (COM FUNCTION CALLING)
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (COM FUNCTION CALLING & LOTE)
 # Criado por: Geovani
 # ============================================================
 
@@ -217,6 +217,12 @@ for mensagem in st.session_state.mensagens:
             ):
                 st.video(mensagem["arquivo"])
 
+            elif tipo == "multiplos_videos" and mensagem.get("lista_videos"):
+                for item in mensagem["lista_videos"]:
+                    if item.get("arquivo") and Path(item["arquivo"]).exists():
+                        st.caption(f"🎬 {item.get('prompt')}")
+                        st.video(item["arquivo"])
+
             if texto:
                 st.write(texto)
 
@@ -329,11 +335,17 @@ if pergunta:
                 config_video=config_vid,
             )
 
-            if resultado["tipo"] == "imagem" and resultado["arquivo"]:
+            if resultado["tipo"] == "imagem" and resultado.get("arquivo"):
                 st.image(resultado["arquivo"], use_container_width=True)
 
-            elif resultado["tipo"] == "video" and resultado["arquivo"]:
+            elif resultado["tipo"] == "video" and resultado.get("arquivo"):
                 st.video(resultado["arquivo"])
+
+            elif resultado["tipo"] == "multiplos_videos" and resultado.get("lista_videos"):
+                for item in resultado["lista_videos"]:
+                    if item.get("arquivo"):
+                        st.caption(f"🎬 {item.get('prompt')}")
+                        st.video(item["arquivo"])
 
             st.write(resultado["texto"])
 
@@ -347,8 +359,9 @@ if pergunta:
                 "role": "assistant",
                 "content": resultado["texto"],
                 "tipo": resultado["tipo"],
-                "arquivo": resultado["arquivo"],
+                "arquivo": resultado.get("arquivo"),
+                "lista_videos": resultado.get("lista_videos"),
             })
 
     st.rerun()
-
+            
