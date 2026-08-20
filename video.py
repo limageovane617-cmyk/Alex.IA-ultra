@@ -68,7 +68,7 @@ def _secret(nome: str) -> str:
 
 
 def aplicar_hf_token():
-    """Injeta o token do Hugging Face no ambiente do sistema sem quebrar o Client."""
+    """Injeta o token do Hugging Face no ambiente para autenticar requisições."""
     token = _secret("HF_TOKEN") or _secret("HUGGINGFACE_HUB_TOKEN")
     if token:
         os.environ["HF_TOKEN"] = token
@@ -109,7 +109,7 @@ Preserve face, hairstyle, clothing, identity. Natural realistic movement.
 
 
 # ============================================================
-# MANIPULAÇÃO DE VÍDEO E GRADIO
+# MANIPULAÇÃO DE VÍDEO
 # ============================================================
 
 def _extrair_video_gradio(resultado: Any) -> Optional[str]:
@@ -154,7 +154,7 @@ def _salvar_video_gradio(origem: str, destino: Path) -> str:
 
 
 # ============================================================
-# MOTORES
+# MOTORES DE GERAÇÃO
 # ============================================================
 
 def gerar_r3gm(
@@ -399,20 +399,21 @@ def gerar_magichour(imagem_bytes: bytes, nome_arquivo: str, prompt: str) -> dict
 
 
 def gerar_video_gratuito_fallback(prompt: str, **kwargs) -> dict:
-    destino = _nome_saida("video_gratuito")
-    urls_publicas = [
-        "https://cdn.pixabay.com/video/2021/04/12/70884-536962070_large.mp4",
-        "https://cdn.pixabay.com/video/2020/05/25/40130-424930030_large.mp4",
+    """Fallback garantido de servidor CDN com MP4 válido de alta qualidade."""
+    destino = _nome_saida("video_fallback")
+    urls_contingencia = [
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
     ]
 
-    for url in urls_publicas:
+    for url in urls_contingencia:
         try:
             res = requests.get(url, timeout=15)
-            if res.status_code == 200 and len(res.content) > 10000:
+            if res.status_code == 200 and len(res.content) > 50000:
                 destino.write_bytes(res.content)
                 return {
                     "sucesso": True,
-                    "motor": "Servidor Público — Fallback",
+                    "motor": "Servidor de Contingência — Gratuito",
                     "video": str(destino),
                     "arquivo": str(destino),
                     "fallback": True,
@@ -425,7 +426,7 @@ def gerar_video_gratuito_fallback(prompt: str, **kwargs) -> dict:
 
 
 # ============================================================
-# GERADOR PRINCIPAL
+# ORQUESTRADOR PRINCIPAL
 # ============================================================
 
 def gerar_video_automatico(
@@ -499,3 +500,45 @@ def gerar_video_texto(prompt: str, **kwargs) -> dict:
 
 def gerar_video_imagem(imagem_bytes: bytes, nome_imagem: str, prompt: str, **kwargs) -> dict:
     return gerar_video(prompt, imagem_bytes=imagem_bytes, nome_imagem=nome_imagem, **kwargs)
+
+
+def mostrar_configuracao_video():
+    st.subheader("🎬 Configuração de Vídeo")
+    camera_video = st.selectbox("📷 Câmera", CAMERAS, index=1, key="video_camera")
+    proporcao_video = st.selectbox("📐 Proporção", PROPORCOES, index=1, key="video_proporcao")
+    duracao_video = st.number_input(
+        "⏱️ Duração do vídeo",
+        min_value=0.5,
+        max_value=10.0,
+        value=5.0,
+        step=0.5,
+        key="video_duracao",
+    )
+    return (camera_video, proporcao_video, duracao_video)
+
+
+def status_video() -> dict:
+    return {
+        "r3gm": R3GM_SPACE,
+        "upsampler": UPSAMPLER_SPACE,
+        "gradio_client": Client is not None,
+        "magic_hour": bool(obter_api_key_magichour()),
+        "replicate": bool(obter_token_replicate()),
+        "ltx": LTX_HF_SPACE,
+    }
+
+
+__all__ = [
+    "NOME_MODULO",
+    "MOTORES_VIDEO",
+    "CAMERAS",
+    "PROPORCOES",
+    "DURACAO_PADRAO",
+    "gerar_video",
+    "gerar_video_automatico",
+    "gerar_video_texto",
+    "gerar_video_imagem",
+    "mostrar_configuracao_video",
+    "status_video",
+    ]
+    
