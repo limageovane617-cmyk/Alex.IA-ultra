@@ -21,3 +21,4 @@ fal-client
 rembg
 pillow
 onnxruntime
+gtts
