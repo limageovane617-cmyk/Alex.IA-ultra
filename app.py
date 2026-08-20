@@ -1,5 +1,5 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (LAYOUT CORRIGIDO)
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (SEM SOBREPOSIÇÃO)
 # Criado por: Geovani
 # ============================================================
 
@@ -13,7 +13,7 @@ from pathlib import Path
 import streamlit as st
 
 # ============================================================
-# ⚙️ CONFIGURAÇÃO
+# ⚙️ CONFIGURAÇÃO DA PÁGINA
 # ============================================================
 
 st.set_page_config(
@@ -74,7 +74,7 @@ if cliente is None:
 
 
 # ============================================================
-# 🖼️ FUNDO & CSS DE LAYOUT
+# 🖼️ FUNDO & CSS LIMPO (SEM POSICIONAMENTO FIXO)
 # ============================================================
 
 def imagem_fundo_css():
@@ -108,9 +108,9 @@ st.markdown(
     }}
 
     .main .block-container {{
-        max-width: 980px;
-        padding-top: 1rem;
-        padding-bottom: 120px !important;
+        max-width: 900px;
+        padding-top: 1.5rem;
+        padding-bottom: 100px !important;
     }}
 
     /* Ocultar avatares */
@@ -130,88 +130,62 @@ st.markdown(
         margin-bottom: 14px !important;
         gap: 0px !important;
     }}
-
-    /* FORÇAR COLUNAS LADO A LADO NO MOBILE SEM EMPILHAR */
-    [data-testid="stHorizontalBlock"] {{
-        display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        gap: 8px !important;
-    }}
-
-    /* BOTÕES CIRCULARES LIMPOS */
-    div[data-testid="stPopover"] > button {{
-        background: rgba(12, 22, 36, 0.90) !important;
-        border: 1px solid rgba(0, 210, 255, 0.4) !important;
-        color: #00d2ff !important;
-        font-size: 1.1rem !important;
-        font-weight: bold !important;
-        border-radius: 50% !important;
-        width: 40px !important;
-        height: 40px !important;
-        min-width: 40px !important;
-        padding: 0 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        backdrop-filter: blur(8px) !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
-    }}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # ============================================================
-# 🤖 CABEÇALHO COM A BARRA DE FERRAMENTAS INTEGRADA
+# 🧰 BARRA LATERAL (MENU RETRÁTIL CLEAN)
 # ============================================================
 
-col_titulo, col_menu, col_video = st.columns([0.7, 0.15, 0.15])
+with st.sidebar:
+    st.title("🧰 Painel de Controle")
+    st.caption("Alex IA Ultra")
+    st.divider()
 
-with col_titulo:
-    st.markdown(f"### 🤖 {AI_NAME}")
+    st.subheader("🛠️ Módulos da IA")
+    if st.button("💻 Código", use_container_width=True):
+        st.session_state.ferramenta_ativa = "codigo"
 
-with col_menu:
-    with st.popover("➕"):
-        st.subheader("🧰 Ferramentas da Ultra")
+    if st.button("📎 Arquivo", use_container_width=True):
+        st.session_state.ferramenta_ativa = "arquivo"
 
-        if st.button("💻 Código", use_container_width=True):
-            st.session_state.ferramenta_ativa = "codigo"
+    if st.button("🎭 Personagem", use_container_width=True):
+        st.session_state.ferramenta_ativa = "personagem"
 
-        if st.button("📎 Arquivo", use_container_width=True):
-            st.session_state.ferramenta_ativa = "arquivo"
+    if st.button("🧠 Memória", use_container_width=True):
+        st.session_state.ferramenta_ativa = "memoria"
 
-        if st.button("🎭 Personagem", use_container_width=True):
-            st.session_state.ferramenta_ativa = "personagem"
+    st.divider()
 
-        if st.button("🧠 Memória", use_container_width=True):
-            st.session_state.ferramenta_ativa = "memoria"
+    st.subheader("🎬 Configurar Vídeo")
+    st.session_state.video_duracao = st.slider(
+        "Duração (Segundos):",
+        min_value=2,
+        max_value=15,
+        value=st.session_state.video_duracao,
+        step=1,
+    )
 
-        st.divider()
+    st.session_state.video_proporcao = st.selectbox(
+        "Proporção:",
+        options=["16:9", "9:16", "1:1"],
+        index=0,
+    )
 
-        if st.button("🗑️ Limpar chat", use_container_width=True):
-            st.session_state.mensagens = []
-            st.session_state.ferramenta_ativa = None
-            st.rerun()
+    st.divider()
 
-with col_video:
-    with st.popover("🎬"):
-        st.subheader("⚙️ Configurar Vídeo Automático")
+    if st.button("🗑️ Limpar Chat", use_container_width=True):
+        st.session_state.mensagens = []
+        st.session_state.ferramenta_ativa = None
+        st.rerun()
 
-        st.session_state.video_duracao = st.slider(
-            "Duração (Segundos):",
-            min_value=2,
-            max_value=15,
-            value=st.session_state.video_duracao,
-            step=1,
-        )
+# ============================================================
+# 🤖 CABEÇALHO PRINCIPAL
+# ============================================================
 
-        st.session_state.video_proporcao = st.selectbox(
-            "Proporção:",
-            options=["16:9", "9:16", "1:1"],
-            index=0,
-        )
-
+st.markdown(f"## 🤖 {AI_NAME}")
 st.caption(f"Criada por {CREATOR_NAME} • inteligência artificial pessoal")
 st.divider()
 
@@ -402,7 +376,7 @@ if pergunta:
         try:
             with st.chat_message("assistant"):
                 with st.spinner("🤖 Alex IA está pensando..."):
-                    resposta = cliente.models.generatecontent(
+                    resposta = cliente.models.generate_content(
                         model=GEMINI_MODEL, contents=instrucao
                     )
 
@@ -429,4 +403,4 @@ if pergunta:
 
         except Exception as erro:
             st.error(f"❌ Erro ao conversar com a Alex: {erro}")
-            
+    
