@@ -1,6 +1,6 @@
 # ============================================================
 # 🧠 CORE / BRAIN.PY — CÉREBRO DA ALEX IA ULTRA
-# Gerencia Function Calling e autonomia do modelo (Ajustado)
+# Gerencia Function Calling e autonomia do modelo (Estável)
 # ============================================================
 
 from concurrent.futures import ThreadPoolExecutor
@@ -60,19 +60,21 @@ def ferramenta_gerar_video(prompt: str, duracao: int = 5, proporcao: str = "16:9
     return {"sucesso": False, "erro": "Falha na geração do vídeo."}
 
 
-def ferramenta_gerar_multiplos_videos(prompts: list, duracao: int = 5, proporcao: str = "16:9") -> dict:
-    """Gera múltiplos vídeos em lote a partir de uma lista de descrições.
+def ferramenta_gerar_multiplos_videos(prompts_separados_por_barra: str, duracao: int = 5, proporcao: str = "16:9") -> dict:
+    """Gera múltiplos vídeos em lote a partir de descrições separadas por barra vertical '|'.
     
     Args:
-        prompts: Lista de descrições de texto para cada vídeo.
+        prompts_separados_por_barra: Descrições dos vídeos separadas por '|' (ex: "praia futurista | cidade cyberpunk").
         duracao: Tempo em segundos de cada vídeo.
         proporcao: Formato dos vídeos (16:9, 9:16 ou 1:1).
     """
     import video
 
+    lista_prompts = [p.strip() for p in prompts_separados_por_barra.split("|") if p.strip()]
+
     def processar_um_video(p):
         res = video.gerar_video(
-            descricao=str(p),
+            descricao=p,
             camera="Sony FX6",
             proporcao=proporcao,
             duracao=duracao,
@@ -80,12 +82,12 @@ def ferramenta_gerar_multiplos_videos(prompts: list, duracao: int = 5, proporcao
             height=512
         )
         if isinstance(res, dict) and res.get("sucesso"):
-            return {"prompt": str(p), "arquivo": res.get("video"), "sucesso": True}
-        return {"prompt": str(p), "arquivo": None, "sucesso": False}
+            return {"prompt": p, "arquivo": res.get("video"), "sucesso": True}
+        return {"prompt": p, "arquivo": None, "sucesso": False}
 
     resultados = []
     with ThreadPoolExecutor(max_workers=2) as executor:
-        resultados = list(executor.map(processar_um_video, prompts))
+        resultados = list(executor.map(processar_um_video, lista_prompts))
 
     videos_gerados = [r for r in resultados if r["sucesso"]]
 
@@ -112,66 +114,73 @@ def processar_resposta_alex(cliente, modelo_id: str, prompt_sistema: str, histor
     
     instrucao_completa = f"""{prompt_sistema}
 
-VOCÊ É UMA IA AUTÔNOMA E DEVE SEMPRE USAR AS FERRAMENTAS DISPONÍVEIS QUANDO SOLICITADO.
-- Nunca diga que está com falha temporária sem tentar acionar a ferramenta primeiro.
-- Quando o usuário pedir 2 ou mais vídeos, acione OBRIGATORIAMENTE 'ferramenta_gerar_multiplos_videos' passando a lista de descrições.
-- Quando pedir 1 vídeo, chame 'ferramenta_gerar_video'.
+Você é a Alex IA. Use as ferramentas sempre que o usuário solicitar imagens ou vídeos.
+- Quando o usuário pedir 2 ou mais vídeos, use obrigatoriamente 'ferramenta_gerar_multiplos_videos' enviando os prompts separados pelo caractere '|' (ex: "cena 1 | cena 2").
+- Quando pedir 1 vídeo, use 'ferramenta_gerar_video'.
 - Preferências de vídeo: Duração {duracao_pref}s, Proporção {proporcao_pref}.
 """
 
     config_geracao = types.GenerateContentConfig(
         system_instruction=instrucao_completa,
         tools=LISTA_FERRAMENTAS,
-        temperature=0.2,
+        temperature=0.3,
     )
 
-    resposta = cliente.models.generate_content(
-        model=modelo_id,
-        contents=mensagem_usuario,
-        config=config_geracao
-    )
+    try:
+        resposta = cliente.models.generate_content(
+            model=modelo_id,
+            contents=mensagem_usuario,
+            config=config_geracao
+        )
 
-    if resposta.function_calls:
-        chamada = resposta.function_calls[0]
-        nome_funcao = chamada.name
-        argumentos = chamada.args
+        if resposta.function_calls:
+            chamada = resposta.function_calls[0]
+            nome_funcao = chamada.name
+            argumentos = chamada.args
 
-        if nome_funcao == "ferramenta_gerar_imagem":
-            prompt = argumentos.get("prompt", mensagem_usuario)
-            res = ferramenta_gerar_imagem(prompt)
-            return {
-                "tipo": "imagem",
-                "texto": f"🖼️ Imagem gerada sobre: **{prompt}**",
-                "arquivo": res.get("arquivo")
-            }
+            if nome_funcao == "ferramenta_gerar_imagem":
+                prompt = argumentos.get("prompt", mensagem_usuario)
+                res = ferramenta_gerar_imagem(prompt)
+                return {
+                    "tipo": "imagem",
+                    "texto": f"🖼️ Imagem gerada sobre: **{prompt}**",
+                    "arquivo": res.get("arquivo")
+                }
 
-        elif nome_funcao == "ferramenta_gerar_video":
-            prompt = argumentos.get("prompt", mensagem_usuario)
-            duracao = argumentos.get("duracao", duracao_pref)
-            proporcao = argumentos.get("proporcao", proporcao_pref)
-            res = ferramenta_gerar_video(prompt, duracao, proporcao)
-            return {
-                "tipo": "video",
-                "texto": f"🎬 Vídeo gerado ({duracao}s) sobre: **{prompt}**",
-                "arquivo": res.get("arquivo")
-            }
+            elif nome_funcao == "ferramenta_gerar_video":
+                prompt = argumentos.get("prompt", mensagem_usuario)
+                duracao = argumentos.get("duracao", duracao_pref)
+                proporcao = argumentos.get("proporcao", proporcao_pref)
+                res = ferramenta_gerar_video(prompt, duracao, proporcao)
+                return {
+                    "tipo": "video",
+                    "texto": f"🎬 Vídeo gerado ({duracao}s) sobre: **{prompt}**",
+                    "arquivo": res.get("arquivo")
+                }
 
-        elif nome_funcao == "ferramenta_gerar_multiplos_videos":
-            prompts = argumentos.get("prompts", [mensagem_usuario])
-            duracao = argumentos.get("duracao", duracao_pref)
-            proporcao = argumentos.get("proporcao", proporcao_pref)
-            res = ferramenta_gerar_multiplos_videos(prompts, duracao, proporcao)
-            return {
-                "tipo": "multiplos_videos",
-                "texto": f"🎬 Gerados **{res['total']} vídeos** com sucesso!",
-                "lista_videos": res.get("lista_videos", []),
-                "arquivo": None
-            }
+            elif nome_funcao == "ferramenta_gerar_multiplos_videos":
+                prompts_raw = argumentos.get("prompts_separados_por_barra", mensagem_usuario)
+                duracao = argumentos.get("duracao", duracao_pref)
+                proporcao = argumentos.get("proporcao", proporcao_pref)
+                res = ferramenta_gerar_multiplos_videos(prompts_raw, duracao, proporcao)
+                return {
+                    "tipo": "multiplos_videos",
+                    "texto": f"🎬 Gerados **{res['total']} vídeos** com sucesso!",
+                    "lista_videos": res.get("lista_videos", []),
+                    "arquivo": None
+                }
 
-    texto_resposta = resposta.text if resposta.text else "Não consegui processar a resposta."
-    return {
-        "tipo": "texto",
-        "texto": texto_resposta,
-        "arquivo": None
-    }
-    
+        texto_resposta = resposta.text if resposta.text else "Não consegui processar a resposta."
+        return {
+            "tipo": "texto",
+            "texto": texto_resposta,
+            "arquivo": None
+        }
+
+    except Exception as e:
+        return {
+            "tipo": "texto",
+            "texto": f"⚠️ Ocorreu um erro no processamento da requisição: {str(e)}",
+            "arquivo": None
+                }
+        
