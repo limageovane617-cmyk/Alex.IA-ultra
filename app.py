@@ -22,17 +22,21 @@ st.set_page_config(
 )
 
 # ============================================================
-# 📦 IMPORTAÇÕES DO PROJETO & LIGAÇÕES DE MÍDIA
+# 📦 IMPORTAÇÕES SEGURAS DOS MÓDULOS DE MÍDIA
 # ============================================================
 
-if "gerenciador_imagem" in sys.modules:
-    importlib.reload(sys.modules["gerenciador_imagem"])
-else:
+try:
+    if "gerenciador_imagem" in sys.modules:
+        importlib.reload(sys.modules["gerenciador_imagem"])
     import gerenciador_imagem
+except Exception as e:
+    gerenciador_imagem = None
 
 try:
+    if "video" in sys.modules:
+        importlib.reload(sys.modules["video"])
     import video
-except ImportError:
+except Exception:
     video = None
 
 from config_ultra import AI_NAME, CREATOR_NAME, GEMINI_MODEL, SYSTEM_PROMPT
@@ -45,13 +49,14 @@ from voz import mostrar_audio
 # ============================================================
 
 def midia_valida(caminho):
-    """Verifica se a mídia é um arquivo local existente ou uma URL válida."""
+    """Verifica se a mídia é um arquivo local válido (>0 bytes) ou URL válida."""
     if not caminho:
         return False
     str_caminho = str(caminho)
     if str_caminho.startswith("http://") or str_caminho.startswith("https://"):
         return True
-    return Path(str_caminho).exists()
+    p = Path(str_caminho)
+    return p.exists() and p.is_file() and p.stat().st_size > 0
 
 # ============================================================
 # 🧠 SESSION STATE
@@ -314,7 +319,7 @@ with col_video_cfg:
         )
 
 # ============================================================
-# 💬 ENTRADA DO CHAT COM AUTONOMIA NATIVA + LIGAÇÃO DIRETA
+# 💬 ENTRADA DO CHAT COM AUTONOMIA NATIVA
 # ============================================================
 
 pergunta = st.chat_input("Digite sua mensagem para Alex...")
@@ -347,8 +352,8 @@ if pergunta:
 
             msg_low = pergunta_limpa.lower()
 
-            # 🎬 LIGAÇÃO DIRETA PARA VÍDEO
-            if any(w in msg_low for w in ["video", "vídeo"]) and resultado.get("tipo") != "video":
+            # 🎬 FORÇA GERAÇÃO DE VÍDEO SE SOLICITADO
+            if any(w in msg_low for w in ["video", "vídeo"]) and not midia_valida(resultado.get("arquivo")):
                 if video and hasattr(video, "gerar_video"):
                     try:
                         res_v = video.gerar_video(
@@ -357,27 +362,35 @@ if pergunta:
                             proporcao=st.session_state.video_proporcao,
                         )
                         caminho_v = res_v.get("arquivo") if isinstance(res_v, dict) else res_v
-                        if caminho_v:
+                        if midia_valida(caminho_v):
                             resultado["tipo"] = "video"
                             resultado["arquivo"] = caminho_v
-                            resultado["texto"] = "Aqui está o vídeo que você pediu!"
+                            resultado["texto"] = "Aqui está o vídeo gerado!"
+                        else:
+                            st.error("❌ O script de vídeo foi chamado, mas não retornou um arquivo válido.")
                     except Exception as e:
-                        st.warning(f"⚠️ Erro ao gerar vídeo: {e}")
+                        st.error(f"❌ Erro ao executar módulo de vídeo: {e}")
+                else:
+                    st.warning("⚠️ O módulo video.py não foi carregado corretamente.")
 
-            # 🖼️ LIGAÇÃO DIRETA PARA IMAGEM
-            elif any(w in msg_low for w in ["imagem", "foto", "desenho", "criar imagem", "cria uma imagem"]) and resultado.get("tipo") != "imagem":
-                # Procura função no gerenciador_imagem
-                func_img = getattr(gerenciador_imagem, "gerar_imagem", None) or getattr(gerenciador_imagem, "criar_imagem", None)
-                if func_img:
-                    try:
-                        res_i = func_img(pergunta_limpa)
-                        caminho_i = res_i.get("arquivo") if isinstance(res_i, dict) else res_i
-                        if caminho_i:
-                            resultado["tipo"] = "imagem"
-                            resultado["arquivo"] = caminho_i
-                            resultado["texto"] = "Aqui está a imagem que você pediu!"
-                    except Exception as e:
-                        st.warning(f"⚠️ Erro ao gerar imagem: {e}")
+            # 🖼️ FORÇA GERAÇÃO DE IMAGEM SE SOLICITADO
+            elif any(w in msg_low for w in ["imagem", "foto", "desenho", "criar imagem", "cria uma imagem"]) and not midia_valida(resultado.get("arquivo")):
+                if gerenciador_imagem:
+                    func_img = getattr(gerenciador_imagem, "gerar_imagem", None) or getattr(gerenciador_imagem, "criar_imagem", None)
+                    if func_img:
+                        try:
+                            res_i = func_img(pergunta_limpa)
+                            caminho_i = res_i.get("arquivo") if isinstance(res_i, dict) else res_i
+                            if midia_valida(caminho_i):
+                                resultado["tipo"] = "imagem"
+                                resultado["arquivo"] = caminho_i
+                                resultado["texto"] = "Aqui está a imagem gerada!"
+                            else:
+                                st.error("❌ O gerador de imagem foi executado, mas não salvou o arquivo.")
+                        except Exception as e:
+                            st.error(f"❌ Erro ao executar gerador de imagem: {e}")
+                else:
+                    st.warning("⚠️ O módulo gerenciador_imagem.py não foi carregado corretamente.")
 
             # Renderiza Imagem
             if resultado.get("tipo") == "imagem" and midia_valida(resultado.get("arquivo")):
@@ -398,7 +411,7 @@ if pergunta:
             if resultado.get("texto"):
                 st.write(resultado["texto"])
 
-            # Renderiza Áudio de Voz da Alex
+            # Renderiza Áudio
             if resultado.get("texto"):
                 try:
                     mostrar_audio(resultado["texto"])
@@ -414,4 +427,4 @@ if pergunta:
             })
 
     st.rerun()
-    
+        
