@@ -1,5 +1,5 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (SEM SOBREPOSIÇÃO)
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (BOTÕES EMBAIXO)
 # Criado por: Geovani
 # ============================================================
 
@@ -13,7 +13,7 @@ from pathlib import Path
 import streamlit as st
 
 # ============================================================
-# ⚙️ CONFIGURAÇÃO DA PÁGINA
+# ⚙️ CONFIGURAÇÃO
 # ============================================================
 
 st.set_page_config(
@@ -74,7 +74,7 @@ if cliente is None:
 
 
 # ============================================================
-# 🖼️ FUNDO & CSS LIMPO (SEM POSICIONAMENTO FIXO)
+# 🖼️ FUNDO & CSS AJUSTADO
 # ============================================================
 
 def imagem_fundo_css():
@@ -107,10 +107,11 @@ st.markdown(
         pointer-events: none;
     }}
 
+    /* Garante espaço no final para o chat não ficar preso atrás dos botões */
     .main .block-container {{
-        max-width: 900px;
+        max-width: 980px;
         padding-top: 1.5rem;
-        padding-bottom: 100px !important;
+        padding-bottom: 140px !important;
     }}
 
     /* Ocultar avatares */
@@ -130,88 +131,53 @@ st.markdown(
         margin-bottom: 14px !important;
         gap: 0px !important;
     }}
+
+    /* POSICIONA OS BOTÕES LOGO ACIMA DO CAMPO DE DIGITAÇÃO */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {{
+        position: fixed !important;
+        bottom: 72px !important; /* Posicionado perfeitamente sobre a caixa de texto */
+        left: 16px !important;
+        z-index: 99999 !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 8px !important;
+        width: auto !important;
+    }}
+
+    /* ESTILO DOS BOTÕES CIRCULARES */
+    div[data-testid="stPopover"] > button {{
+        background: rgba(12, 22, 36, 0.90) !important;
+        border: 1px solid rgba(0, 210, 255, 0.4) !important;
+        color: #00d2ff !important;
+        font-size: 1.1rem !important;
+        font-weight: bold !important;
+        border-radius: 50% !important;
+        width: 38px !important;
+        height: 38px !important;
+        min-width: 38px !important;
+        padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        backdrop-filter: blur(8px) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+    }}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # ============================================================
-# 🧰 BARRA LATERAL (MENU RETRÁTIL CLEAN)
-# ============================================================
-
-with st.sidebar:
-    st.title("🧰 Painel de Controle")
-    st.caption("Alex IA Ultra")
-    st.divider()
-
-    st.subheader("🛠️ Módulos da IA")
-    if st.button("💻 Código", use_container_width=True):
-        st.session_state.ferramenta_ativa = "codigo"
-
-    if st.button("📎 Arquivo", use_container_width=True):
-        st.session_state.ferramenta_ativa = "arquivo"
-
-    if st.button("🎭 Personagem", use_container_width=True):
-        st.session_state.ferramenta_ativa = "personagem"
-
-    if st.button("🧠 Memória", use_container_width=True):
-        st.session_state.ferramenta_ativa = "memoria"
-
-    st.divider()
-
-    st.subheader("🎬 Configurar Vídeo")
-    st.session_state.video_duracao = st.slider(
-        "Duração (Segundos):",
-        min_value=2,
-        max_value=15,
-        value=st.session_state.video_duracao,
-        step=1,
-    )
-
-    st.session_state.video_proporcao = st.selectbox(
-        "Proporção:",
-        options=["16:9", "9:16", "1:1"],
-        index=0,
-    )
-
-    st.divider()
-
-    if st.button("🗑️ Limpar Chat", use_container_width=True):
-        st.session_state.mensagens = []
-        st.session_state.ferramenta_ativa = None
-        st.rerun()
-
-# ============================================================
-# 🤖 CABEÇALHO PRINCIPAL
+# 🤖 CABEÇALHO LIMPO
 # ============================================================
 
 st.markdown(f"## 🤖 {AI_NAME}")
 st.caption(f"Criada por {CREATOR_NAME} • inteligência artificial pessoal")
 st.divider()
-
-# ============================================================
-# 🛠️ PAINEL DE FERRAMENTAS ATIVAS
-# ============================================================
-
-if st.session_state.ferramenta_ativa:
-    ferramenta = st.session_state.ferramenta_ativa
-
-    with st.expander(f"🛠️ Módulo Ativo: {ferramenta.capitalize()}", expanded=True):
-        if ferramenta == "codigo":
-            st.info("💻 Envie seu código ou dúvida de programação direto no chat.")
-
-        elif ferramenta == "arquivo":
-            st.file_uploader("Envie um arquivo para a Alex analisar:")
-
-        elif ferramenta == "personagem":
-            st.info("🎭 A personalidade da Alex está configurada em tom natural.")
-
-        elif ferramenta == "memoria":
-            st.info("🧠 Memória do sistema sincronizada.")
-
-        if st.button("Fechar Módulo"):
-            st.session_state.ferramenta_ativa = None
-            st.rerun()
 
 # ============================================================
 # 💬 HISTÓRICO DE MENSAGENS
@@ -266,6 +232,77 @@ for mensagem in st.session_state.mensagens:
                     mostrar_audio(texto)
                 except Exception:
                     pass
+
+# ============================================================
+# 🛠️ PAINEL DE FERRAMENTAS ATIVAS
+# ============================================================
+
+if st.session_state.ferramenta_ativa:
+    ferramenta = st.session_state.ferramenta_ativa
+
+    with st.expander(f"🛠️ Módulo Ativo: {ferramenta.capitalize()}", expanded=True):
+        if ferramenta == "codigo":
+            st.info("💻 Envie seu código ou dúvida de programação direto no chat.")
+
+        elif ferramenta == "arquivo":
+            st.file_uploader("Envie um arquivo para a Alex analisar:")
+
+        elif ferramenta == "personagem":
+            st.info("🎭 A personalidade da Alex está configurada em tom natural.")
+
+        elif ferramenta == "memoria":
+            st.info("🧠 Memória do sistema sincronizada.")
+
+        if st.button("Fechar Módulo"):
+            st.session_state.ferramenta_ativa = None
+            st.rerun()
+
+# ============================================================
+# 🧰 ÍCONES FLUTUANTES EMBAIXO
+# ============================================================
+
+col_menu, col_video_cfg = st.columns([1, 1])
+
+with col_menu:
+    with st.popover("➕"):
+        st.subheader("🧰 Ferramentas da Ultra")
+
+        if st.button("💻 Código", use_container_width=True):
+            st.session_state.ferramenta_ativa = "codigo"
+
+        if st.button("📎 Arquivo", use_container_width=True):
+            st.session_state.ferramenta_ativa = "arquivo"
+
+        if st.button("🎭 Personagem", use_container_width=True):
+            st.session_state.ferramenta_ativa = "personagem"
+
+        if st.button("🧠 Memória", use_container_width=True):
+            st.session_state.ferramenta_ativa = "memoria"
+
+        st.divider()
+
+        if st.button("🗑️ Limpar chat", use_container_width=True):
+            st.session_state.mensagens = []
+            st.session_state.ferramenta_ativa = None
+            st.rerun()
+
+with col_video_cfg:
+    with st.popover("🎬"):
+        st.subheader("⚙️ Configurar Vídeo Automático")
+
+        st.session_state.video_duracao = st.slider(
+            "Duração (Segundos):",
+            min_value=2,
+            max_value=15,
+            value=st.session_state.video_duracao,
+            step=1,
+        )
+
+        st.session_state.video_proporcao = st.selectbox(
+            "Proporção:",
+            options=["16:9", "9:16", "1:1"],
+            index=0,
+        )
 
 # ============================================================
 # 💬 ENTRADA DO CHAT
@@ -403,4 +440,4 @@ if pergunta:
 
         except Exception as erro:
             st.error(f"❌ Erro ao conversar com a Alex: {erro}")
-    
+            
