@@ -314,7 +314,7 @@ with col_video_cfg:
         )
 
 # ============================================================
-# 💬 ENTRADA DO CHAT COM AUTONOMIA NATIVA + LIGAÇÃO DE EMERGÊNCIA
+# 💬 ENTRADA DO CHAT COM AUTONOMIA NATIVA + LIGAÇÃO DIRETA
 # ============================================================
 
 pergunta = st.chat_input("Digite sua mensagem para Alex...")
@@ -345,37 +345,39 @@ if pergunta:
                 config_video=config_vid,
             )
 
-            # 🔗 LIGAÇÃO DE SEGURANÇA: SE A IA NÃO EXECUTOU A FERRAMENTA, FORÇA A GERAÇÃO
             msg_low = pergunta_limpa.lower()
 
-            # 1. Força vídeo se a palavra chave for detectada e não retornou vídeo
-            if ("video" in msg_low or "vídeo" in msg_low) and any(w in msg_low for w in ["gera", "cria", "faça", "faz"]):
-                if resultado.get("tipo") != "video" and video and hasattr(video, "gerar_video"):
+            # 🎬 LIGAÇÃO DIRETA PARA VÍDEO
+            if any(w in msg_low for w in ["video", "vídeo"]) and resultado.get("tipo") != "video":
+                if video and hasattr(video, "gerar_video"):
                     try:
                         res_v = video.gerar_video(
                             prompt=pergunta_limpa,
                             duracao=st.session_state.video_duracao,
                             proporcao=st.session_state.video_proporcao,
                         )
-                        if res_v and res_v.get("arquivo"):
+                        caminho_v = res_v.get("arquivo") if isinstance(res_v, dict) else res_v
+                        if caminho_v:
                             resultado["tipo"] = "video"
-                            resultado["arquivo"] = res_v["arquivo"]
-                            resultado["texto"] = f"Aqui está o vídeo que você pediu!"
-                    except Exception:
-                        pass
+                            resultado["arquivo"] = caminho_v
+                            resultado["texto"] = "Aqui está o vídeo que você pediu!"
+                    except Exception as e:
+                        st.warning(f"⚠️ Erro ao gerar vídeo: {e}")
 
-            # 2. Força imagem se a palavra chave for detectada e não retornou imagem
-            elif ("imagem" in msg_low or "foto" in msg_low or "desenho" in msg_low) and any(w in msg_low for w in ["gera", "cria", "faça", "faz"]):
-                if resultado.get("tipo") != "imagem" and hasattr(gerenciador_imagem, "gerar_imagem"):
+            # 🖼️ LIGAÇÃO DIRETA PARA IMAGEM
+            elif any(w in msg_low for w in ["imagem", "foto", "desenho", "criar imagem", "cria uma imagem"]) and resultado.get("tipo") != "imagem":
+                # Procura função no gerenciador_imagem
+                func_img = getattr(gerenciador_imagem, "gerar_imagem", None) or getattr(gerenciador_imagem, "criar_imagem", None)
+                if func_img:
                     try:
-                        res_i = gerenciador_imagem.gerar_imagem(prompt=pergunta_limpa)
+                        res_i = func_img(pergunta_limpa)
                         caminho_i = res_i.get("arquivo") if isinstance(res_i, dict) else res_i
                         if caminho_i:
                             resultado["tipo"] = "imagem"
                             resultado["arquivo"] = caminho_i
-                            resultado["texto"] = f"Aqui está a imagem que você pediu!"
-                    except Exception:
-                        pass
+                            resultado["texto"] = "Aqui está a imagem que você pediu!"
+                    except Exception as e:
+                        st.warning(f"⚠️ Erro ao gerar imagem: {e}")
 
             # Renderiza Imagem
             if resultado.get("tipo") == "imagem" and midia_valida(resultado.get("arquivo")):
@@ -412,3 +414,4 @@ if pergunta:
             })
 
     st.rerun()
+    
