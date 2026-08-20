@@ -6,6 +6,7 @@
 import base64
 import importlib
 import sys
+import traceback
 from pathlib import Path
 from PIL import Image
 
@@ -30,7 +31,7 @@ try:
     if "gerenciador_imagem" in sys.modules:
         importlib.reload(sys.modules["gerenciador_imagem"])
     import gerenciador_imagem
-except Exception:
+except Exception as e:
     gerenciador_imagem = None
 
 try:
@@ -71,7 +72,6 @@ def midia_valida(caminho, tipo="video"):
             return True
             
         elif tipo == "video":
-            # Verifica cabeçalhos comuns de MP4/WebM/AVI
             headers_validos = [b"ftyp", b"\x1a\x45\xdf\xa3", b"RIFF"]
             return any(h in dados for h in headers_validos)
             
@@ -262,7 +262,7 @@ for mensagem in st.session_state.mensagens:
             if texto:
                 st.write(texto)
 
-            if texto:
+            if texto and not mensagem.get("is_error"):
                 try:
                     mostrar_audio(texto)
                 except Exception:
@@ -340,7 +340,7 @@ with col_video_cfg:
         )
 
 # ============================================================
-# 💬 ENTRADA DO CHAT COM AUTONOMIA NATIVA
+# 💬 ENTRADA DO CHAT
 # ============================================================
 
 pergunta = st.chat_input("Digite sua mensagem para Alex...")
@@ -372,6 +372,7 @@ if pergunta:
             )
 
             msg_low = pergunta_limpa.lower()
+            houve_erro = False
 
             # 🎬 PROCESSAMENTO DE VÍDEO
             if any(w in msg_low for w in ["video", "vídeo"]) and not midia_valida(resultado.get("arquivo"), "video"):
@@ -389,13 +390,21 @@ if pergunta:
                             resultado["arquivo"] = caminho_v
                             resultado["texto"] = "Aqui está o seu vídeo!"
                         else:
-                            st.error("⚠️ A API de vídeo não retornou um MP4 válido. Verifique suas chaves/créditos de API do serviço de vídeo.")
-                            resultado["texto"] = "Não foi possível gerar o vídeo no momento."
+                            houve_erro = True
+                            err_msg = f"⚠️ O arquivo retornado por `video.py` não é um MP4 válido. Retorno obtido: {res_v}"
+                            st.error(err_msg)
+                            resultado["texto"] = err_msg
                             resultado["tipo"] = "texto"
                     except Exception as e:
-                        st.error(f"❌ Erro ao chamar gerador de vídeo: {e}")
-                        resultado["texto"] = "Ocorreu um erro ao gerar o vídeo."
+                        houve_erro = True
+                        err_trace = traceback.format_exc()
+                        st.error(f"❌ Erro ao executar video.py:\n```\n{err_trace}\n```")
+                        resultado["texto"] = f"Erro na geração do vídeo: {e}"
                         resultado["tipo"] = "texto"
+                else:
+                    houve_erro = True
+                    st.error("❌ O módulo `video.py` não possui a função `gerar_video` ou não foi importado.")
+                    resultado["texto"] = "Módulo de vídeo indisponível."
 
             # 🖼️ PROCESSAMENTO DE IMAGEM
             elif any(w in msg_low for w in ["imagem", "foto", "desenho", "criar imagem", "cria uma imagem"]) and not midia_valida(resultado.get("arquivo"), "imagem"):
@@ -411,33 +420,31 @@ if pergunta:
                                 resultado["arquivo"] = caminho_i
                                 resultado["texto"] = "Aqui está a sua imagem!"
                             else:
-                                st.error("⚠️ A API de imagem falhou ao gerar a figura. Verifique os logs de erro ou limites da API.")
-                                resultado["texto"] = "Não foi possível gerar a imagem no momento."
+                                houve_erro = True
+                                err_msg = f"⚠️ O arquivo gerado por `gerenciador_imagem.py` não é uma imagem válida. Retorno obtido: {res_i}"
+                                st.error(err_msg)
+                                resultado["texto"] = err_msg
                                 resultado["tipo"] = "texto"
                         except Exception as e:
-                            st.error(f"❌ Erro ao chamar gerador de imagem: {e}")
-                            resultado["texto"] = "Ocorreu um erro ao gerar a imagem."
+                            houve_erro = True
+                            err_trace = traceback.format_exc()
+                            st.error(f"❌ Erro ao executar gerenciador_imagem.py:\n```\n{err_trace}\n```")
+                            resultado["texto"] = f"Erro na geração da imagem: {e}"
                             resultado["tipo"] = "texto"
 
-            # Renderiza Mídia se for VÁLIDA
+            # Renderiza Mídia
             if resultado.get("tipo") == "imagem" and midia_valida(resultado.get("arquivo"), "imagem"):
                 st.image(resultado["arquivo"], use_container_width=True)
 
             elif resultado.get("tipo") == "video" and midia_valida(resultado.get("arquivo"), "video"):
                 st.video(resultado["arquivo"])
 
-            elif resultado.get("tipo") == "multiplos_videos" and resultado.get("lista_videos"):
-                for item in resultado["lista_videos"]:
-                    if midia_valida(item.get("arquivo"), "video"):
-                        st.caption(f"🎬 {item.get('prompt', '')}")
-                        st.video(item["arquivo"])
-
             # Renderiza Texto
             if resultado.get("texto"):
                 st.write(resultado["texto"])
 
-            # Voz
-            if resultado.get("texto"):
+            # Voz (apenas se NÃO houver erro)
+            if resultado.get("texto") and not houve_erro:
                 try:
                     mostrar_audio(resultado["texto"])
                 except Exception:
@@ -448,8 +455,8 @@ if pergunta:
                 "content": resultado.get("texto", ""),
                 "tipo": resultado.get("tipo", "texto"),
                 "arquivo": resultado.get("arquivo") if midia_valida(resultado.get("arquivo"), resultado.get("tipo")) else None,
-                "lista_videos": resultado.get("lista_videos"),
+                "is_error": houve_erro,
             })
 
     st.rerun()
-                            
+    
