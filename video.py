@@ -52,7 +52,7 @@ PASTA.mkdir(parents=True, exist_ok=True)
 
 
 # ============================================================
-# UTILIDADES
+# UTILIDADES E AUTENTICAÇÃO
 # ============================================================
 
 def _secret(nome: str) -> str:
@@ -67,8 +67,12 @@ def _secret(nome: str) -> str:
     return str(valor or "").strip()
 
 
-def obter_hf_token() -> Optional[str]:
-    return _secret("HF_TOKEN") or _secret("HUGGINGFACE_HUB_TOKEN") or None
+def aplicar_hf_token():
+    """Injeta o token do Hugging Face no ambiente do sistema sem quebrar o Client."""
+    token = _secret("HF_TOKEN") or _secret("HUGGINGFACE_HUB_TOKEN")
+    if token:
+        os.environ["HF_TOKEN"] = token
+        os.environ["HUGGINGFACE_HUB_TOKEN"] = token
 
 
 def obter_api_key_magichour() -> str:
@@ -94,48 +98,18 @@ def _nome_saida(prefixo: str) -> Path:
     return PASTA / f"{prefixo}_{int(time.time() * 1000)}.mp4"
 
 
-# ============================================================
-# PROMPT
-# ============================================================
-
 def montar_prompt(movimento: str, camera: str = "Sony FX6") -> str:
     return f"""
 Animate the provided image into a realistic cinematic video.
-
-Movement:
-{movimento}
-
-Camera:
-{camera}
-
-IMPORTANT:
-Keep exactly the same character from the reference image.
-
-Preserve:
-- face
-- hairstyle
-- clothing
-- body
-- accessories
-- colors
-- identity
-
-Do not create another character.
-Do not change the clothes.
-Do not change the face.
-Do not change the hairstyle.
-Do not duplicate the character.
-Do not add another person.
-
-Natural realistic movement.
-Smooth cinematic camera movement.
-Realistic lighting.
-Realistic physics.
+Movement: {movimento}
+Camera: {camera}
+IMPORTANT: Keep exactly the same character from the reference image.
+Preserve face, hairstyle, clothing, identity. Natural realistic movement.
 """.strip()
 
 
 # ============================================================
-# LOCALIZAR VÍDEO RETORNADO PELO GRADIO
+# MANIPULAÇÃO DE VÍDEO E GRADIO
 # ============================================================
 
 def _extrair_video_gradio(resultado: Any) -> Optional[str]:
@@ -180,7 +154,7 @@ def _salvar_video_gradio(origem: str, destino: Path) -> str:
 
 
 # ============================================================
-# MOTOR 1 — WAN 2.2 R3GM
+# MOTORES
 # ============================================================
 
 def gerar_r3gm(
@@ -194,8 +168,8 @@ def gerar_r3gm(
         raise RuntimeError("gradio_client não está disponível.")
     if not imagem_bytes:
         raise ValueError("O R3GM precisa de uma imagem.")
-    if not movimento:
-        raise ValueError("O movimento está vazio.")
+
+    aplicar_hf_token()
 
     extensao = Path(nome_imagem).suffix.lower()
     if extensao not in [".png", ".jpg", ".jpeg", ".webp"]:
@@ -204,16 +178,13 @@ def gerar_r3gm(
     entrada = PASTA / f"entrada_r3gm_{int(time.time()*1000)}{extensao}"
     entrada.write_bytes(imagem_bytes)
 
-    prompt = montar_prompt(movimento, camera)
-    token = obter_hf_token()
-
-    client = Client(R3GM_SPACE, hf_token=token)
+    client = Client(R3GM_SPACE)
     resultado = client.predict(
         input_image=handle_file(str(entrada)),
         last_image=None,
-        prompt=prompt,
+        prompt=montar_prompt(movimento, camera),
         steps=4,
-        negative_prompt="static, blurry, low quality, distorted face, extra fingers",
+        negative_prompt="static, blurry, low quality",
         duration_seconds=max(0.5, min(float(duracao), 10.0)),
         guidance_scale=1.0,
         guidance_scale_2=1.0,
@@ -246,10 +217,6 @@ def gerar_r3gm(
     }
 
 
-# ============================================================
-# MOTOR 2 — WAN 2.2 UPSAMPLER
-# ============================================================
-
 def gerar_upsampler(
     imagem_bytes: bytes,
     nome_imagem: str,
@@ -262,6 +229,8 @@ def gerar_upsampler(
     if not imagem_bytes:
         raise ValueError("O Upsampler precisa de uma imagem.")
 
+    aplicar_hf_token()
+
     extensao = Path(nome_imagem).suffix.lower()
     if extensao not in [".png", ".jpg", ".jpeg", ".webp"]:
         extensao = ".jpg"
@@ -269,16 +238,13 @@ def gerar_upsampler(
     entrada = PASTA / f"entrada_upsampler_{int(time.time()*1000)}{extensao}"
     entrada.write_bytes(imagem_bytes)
 
-    prompt = montar_prompt(movimento, camera)
-    token = obter_hf_token()
-
-    client = Client(UPSAMPLER_SPACE, hf_token=token)
+    client = Client(UPSAMPLER_SPACE)
     resultado = client.predict(
         input_image=handle_file(str(entrada)),
         last_image=None,
-        prompt=prompt,
+        prompt=montar_prompt(movimento, camera),
         steps=6,
-        negative_prompt="static, blurry, low quality, distorted face",
+        negative_prompt="static, blurry, low quality",
         duration_seconds=max(0.5, min(float(duracao), 5.0)),
         guidance_scale=1.0,
         guidance_scale_2=1.0,
@@ -311,10 +277,6 @@ def gerar_upsampler(
     }
 
 
-# ============================================================
-# MOTOR 3 — LTX 2.3 HUGGING FACE
-# ============================================================
-
 def gerar_ltx_huggingface(
     prompt: str,
     duration: float = 1.0,
@@ -328,15 +290,15 @@ def gerar_ltx_huggingface(
     if not prompt:
         raise ValueError("O prompt está vazio.")
 
+    aplicar_hf_token()
+
     caminho_imagem = None
     if imagem_bytes:
         ext = Path(nome_imagem).suffix.lower() or ".png"
         caminho_imagem = PASTA / f"entrada_ltx_{int(time.time()*1000)}{ext}"
         caminho_imagem.write_bytes(imagem_bytes)
 
-    token = obter_hf_token()
-    client = Client(LTX_HF_SPACE, hf_token=token)
-
+    client = Client(LTX_HF_SPACE)
     resultado = client.predict(
         input_image=str(caminho_imagem) if caminho_imagem else None,
         prompt=prompt.strip(),
@@ -366,44 +328,27 @@ def gerar_ltx_huggingface(
     }
 
 
-# ============================================================
-# MOTOR 4 — MAGIC HOUR
-# ============================================================
+def gerar_magichour(imagem_bytes: bytes, nome_arquivo: str, prompt: str) -> dict:
+    if not imagem_bytes:
+        raise ValueError("Magic Hour precisa de imagem.")
 
-def obter_url_upload(extensao: str):
-    ext = str(extensao).lower().replace(".", "")
-    resposta = requests.post(
+    ext = Path(nome_arquivo).suffix.lower().replace(".", "") or "png"
+    upload_res = requests.post(
         f"{MAGIC_HOUR_BASE_URL}/files/upload-urls",
         headers=headers_magichour(),
         json={"items": [{"type": "image", "extension": ext}]},
         timeout=60,
     )
-    if resposta.status_code != 200:
-        raise RuntimeError(f"Magic Hour HTTP {resposta.status_code}: {resposta.text}")
+    if upload_res.status_code != 200:
+        raise RuntimeError(f"Magic Hour HTTP {upload_res.status_code}")
 
-    dados = resposta.json()
-    itens = dados.get("items") or []
-    if not itens:
-        raise RuntimeError("Magic Hour não retornou upload.")
+    upload_url = upload_res.json()["items"][0]["upload_url"]
+    file_path = upload_res.json()["items"][0]["file_path"]
 
-    item = itens[0]
-    return (item["upload_url"], item["file_path"])
-
-
-def enviar_imagem_magichour(imagem_bytes: bytes, nome: str) -> str:
-    ext = Path(nome).suffix.lower().replace(".", "") or "png"
-    upload_url, file_path = obter_url_upload(ext)
-    resposta = requests.put(upload_url, data=imagem_bytes, timeout=120)
-    if resposta.status_code not in [200, 201, 204]:
+    put_res = requests.put(upload_url, data=imagem_bytes, timeout=120)
+    if put_res.status_code not in [200, 201, 204]:
         raise RuntimeError("Falha no upload Magic Hour.")
-    return file_path
 
-
-def gerar_magichour(imagem_bytes: bytes, nome_arquivo: str, prompt: str) -> dict:
-    if not imagem_bytes:
-        raise ValueError("Magic Hour precisa de imagem.")
-
-    file_path = enviar_imagem_magichour(imagem_bytes, nome_arquivo)
     dados = {
         "name": "Alex IA Ultra",
         "end_seconds": MAGIC_HOUR_DURACAO,
@@ -421,29 +366,23 @@ def gerar_magichour(imagem_bytes: bytes, nome_arquivo: str, prompt: str) -> dict
         timeout=120,
     )
     if resposta.status_code not in [200, 201, 202]:
-        raise RuntimeError(f"Magic Hour HTTP {resposta.status_code}: {resposta.text}")
+        raise RuntimeError(f"Magic Hour HTTP {resposta.status_code}")
 
-    resultado = resposta.json()
-    projeto = resultado.get("id")
-    if not projeto:
-        raise RuntimeError("Magic Hour não retornou ID.")
-
+    projeto = resposta.json().get("id")
     inicio = time.time()
     while time.time() - inicio < 300:
-        resposta = requests.get(
+        res = requests.get(
             f"{MAGIC_HOUR_BASE_URL}/video-projects/{projeto}",
             headers=headers_magichour(),
             timeout=60,
         )
-        if resposta.status_code == 200:
-            dados = resposta.json()
-            if dados.get("status") == "failed":
-                raise RuntimeError("Magic Hour falhou na geração do vídeo.")
-
-            url = encontrar_url_video(dados)
+        if res.status_code == 200:
+            info = res.json()
+            if info.get("status") == "failed":
+                raise RuntimeError("Magic Hour falhou.")
+            url = info.get("download_url") or info.get("video_url")
             if url:
                 video = requests.get(url, timeout=180)
-                video.raise_for_status()
                 caminho = _nome_saida("video_magichour")
                 caminho.write_bytes(video.content)
                 return {
@@ -459,21 +398,7 @@ def gerar_magichour(imagem_bytes: bytes, nome_arquivo: str, prompt: str) -> dict
     raise RuntimeError("Magic Hour demorou demais.")
 
 
-def encontrar_url_video(dados: Any) -> Optional[str]:
-    if not isinstance(dados, dict):
-        return None
-    for chave in ["video_url", "download_url", "output_url", "url"]:
-        valor = dados.get(chave)
-        if isinstance(valor, str) and valor.startswith("http"):
-            return valor
-    return None
-
-
-# ============================================================
-# MOTOR 5 — FALLBACK VÁLIDO DE REDUNDÂNCIA
-# ============================================================
-
-def gerar_video_gratuito_fallback(prompt: str, width: int = 512, height: int = 512) -> dict:
+def gerar_video_gratuito_fallback(prompt: str, **kwargs) -> dict:
     destino = _nome_saida("video_gratuito")
     urls_publicas = [
         "https://cdn.pixabay.com/video/2021/04/12/70884-536962070_large.mp4",
@@ -496,11 +421,11 @@ def gerar_video_gratuito_fallback(prompt: str, width: int = 512, height: int = 5
         except Exception:
             continue
 
-    raise RuntimeError("Fallback gratuito indisponível.")
+    raise RuntimeError("Fallback de vídeo indisponível.")
 
 
 # ============================================================
-# GERADOR PRINCIPAL COM FALLBACK COMPLETO
+# GERADOR PRINCIPAL
 # ============================================================
 
 def gerar_video_automatico(
@@ -512,50 +437,33 @@ def gerar_video_automatico(
     height: int = 512,
     descricao: Optional[str] = None,
     camera: str = "Sony FX6",
-    proporcao: str = "16:9",
     **kwargs,
 ) -> dict:
     texto = (prompt or descricao or "").strip()
-
     if not texto:
-        return {
-            "sucesso": False,
-            "video": None,
-            "arquivo": None,
-            "motor": None,
-            "erro": "O movimento está vazio.",
-        }
+        return {"sucesso": False, "erro": "O movimento está vazio."}
 
     erros = []
 
-    # 1 — R3GM (Se houver imagem)
     if imagem_bytes:
         try:
             return gerar_r3gm(imagem_bytes, nome_imagem, texto, camera, duracao)
         except Exception as erro:
             erros.append("R3GM: " + str(erro))
 
-    # 2 — UPSAMPLER (Se houver imagem)
-    if imagem_bytes:
         try:
-            res = gerar_upsampler(imagem_bytes, nome_imagem, texto, camera, duracao)
-            res["erros_anteriores"] = erros
-            return res
+            return gerar_upsampler(imagem_bytes, nome_imagem, texto, camera, duracao)
         except Exception as erro:
             erros.append("Upsampler: " + str(erro))
 
-    # 3 — MAGIC HOUR (Se houver imagem e chave)
-    if imagem_bytes and obter_api_key_magichour():
-        try:
-            res = gerar_magichour(imagem_bytes, nome_imagem, montar_prompt(texto, camera))
-            res["erros_anteriores"] = erros
-            return res
-        except Exception as erro:
-            erros.append("Magic Hour: " + str(erro))
+        if obter_api_key_magichour():
+            try:
+                return gerar_magichour(imagem_bytes, nome_imagem, montar_prompt(texto, camera))
+            except Exception as erro:
+                erros.append("Magic Hour: " + str(erro))
 
-    # 4 — LTX 2.3 HUGGING FACE (Autenticado via HF_TOKEN)
     try:
-        res = gerar_ltx_huggingface(
+        return gerar_ltx_huggingface(
             montar_prompt(texto, camera),
             duration=min(float(duracao), 5.0),
             height=height,
@@ -563,16 +471,11 @@ def gerar_video_automatico(
             imagem_bytes=imagem_bytes,
             nome_imagem=nome_imagem,
         )
-        res["erros_anteriores"] = erros
-        return res
     except Exception as erro:
         erros.append("LTX-2.3: " + str(erro))
 
-    # 5 — FALLBACK FINAL
     try:
-        res = gerar_video_gratuito_fallback(texto, width=width, height=height)
-        res["erros_anteriores"] = erros
-        return res
+        return gerar_video_gratuito_fallback(texto)
     except Exception as erro:
         erros.append("Fallback Gratuito: " + str(erro))
 
@@ -586,112 +489,13 @@ def gerar_video_automatico(
     }
 
 
-# ============================================================
-# COMPATIBILIDADE APP.PY
-# ============================================================
-
-def gerar_video(
-    prompt: Optional[str] = None,
-    imagem_bytes: Optional[bytes] = None,
-    nome_imagem: str = "imagem.png",
-    duracao: float = 5.0,
-    width: int = 512,
-    height: int = 512,
-    descricao: Optional[str] = None,
-    **kwargs,
-) -> dict:
-    return gerar_video_automatico(
-        prompt=prompt,
-        imagem_bytes=imagem_bytes,
-        nome_imagem=nome_imagem,
-        duracao=duracao,
-        width=width,
-        height=height,
-        descricao=descricao,
-        **kwargs,
-    )
+def gerar_video(prompt: Optional[str] = None, **kwargs) -> dict:
+    return gerar_video_automatico(prompt=prompt, **kwargs)
 
 
-def gerar_video_texto(prompt: str, duracao: float = 1.0, **kwargs) -> dict:
-    return gerar_video_automatico(prompt=prompt, duracao=duracao, **kwargs)
+def gerar_video_texto(prompt: str, **kwargs) -> dict:
+    return gerar_video_automatico(prompt=prompt, **kwargs)
 
 
-def gerar_video_imagem(
-    imagem_bytes: bytes,
-    nome_imagem: str,
-    prompt: str,
-    duracao: float = 5.0,
-    **kwargs,
-) -> dict:
-    return gerar_video(
-        prompt,
-        imagem_bytes=imagem_bytes,
-        nome_imagem=nome_imagem,
-        duracao=duracao,
-        **kwargs,
-    )
-
-
-def gerar(prompt: str, **kwargs) -> dict:
-    return gerar_video(prompt, **kwargs)
-
-
-def gerar_video_fallback(prompt: str, **kwargs) -> Optional[str]:
-    resultado = gerar_video(prompt, **kwargs)
-    return resultado.get("video") or resultado.get("arquivo")
-
-
-def mostrar_configuracao_video():
-    st.subheader("🎬 Configuração de Vídeo")
-    camera_video = st.selectbox("📷 Câmera", CAMERAS, index=1, key="video_camera")
-    proporcao_video = st.selectbox("📐 Proporção", PROPORCOES, index=1, key="video_proporcao")
-    duracao_video = st.number_input(
-        "⏱️ Duração do vídeo",
-        min_value=0.5,
-        max_value=10.0,
-        value=5.0,
-        step=0.5,
-        key="video_duracao",
-    )
-
-    st.write("**🎥 Motores disponíveis:**")
-    for motor in MOTORES_VIDEO:
-        st.write(f"• {motor}")
-
-    return (camera_video, proporcao_video, duracao_video)
-
-
-def status_video() -> dict:
-    return {
-        "r3gm": R3GM_SPACE,
-        "upsampler": UPSAMPLER_SPACE,
-        "gradio_client": Client is not None,
-        "hf_token": bool(obter_hf_token()),
-        "magic_hour": bool(obter_api_key_magichour()),
-        "replicate": bool(obter_token_replicate()),
-        "ltx": LTX_HF_SPACE,
-    }
-
-
-__all__ = [
-    "NOME_MODULO",
-    "MOTORES_VIDEO",
-    "CAMERAS",
-    "PROPORCOES",
-    "DURACAO_PADRAO",
-    "gerar_video",
-    "gerar_video_automatico",
-    "gerar_video_fallback",
-    "gerar",
-    "gerar_video_texto",
-    "gerar_video_imagem",
-    "gerar_r3gm",
-    "gerar_upsampler",
-    "gerar_ltx_huggingface",
-    "gerar_magichour",
-    "mostrar_configuracao_video",
-    "obter_hf_token",
-    "obter_api_key_magichour",
-    "obter_token_replicate",
-    "status_video",
-]
+def gerar_video_imagem(imagem_bytes: bytes, nome_imagem: str, prompt: str, **kwargs) -> dict:
+    return gerar_video(prompt, imagem_bytes=imagem_bytes, nome_imagem=nome_imagem, **kwargs)
