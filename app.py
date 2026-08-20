@@ -1,5 +1,5 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (BOTÕES EMBAIXO)
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (BOTÕES ABAIXO DO CHAT)
 # Criado por: Geovani
 # ============================================================
 
@@ -74,7 +74,7 @@ if cliente is None:
 
 
 # ============================================================
-# 🖼️ FUNDO & CSS AJUSTADO
+# 🖼️ FUNDO & CSS AJUSTADO PARA O POSICIONAMENTO EXATO
 # ============================================================
 
 def imagem_fundo_css():
@@ -107,11 +107,11 @@ st.markdown(
         pointer-events: none;
     }}
 
-    /* Garante espaço no final para o chat não ficar preso atrás dos botões */
+    /* Espaço para o histórico não ficar escondido */
     .main .block-container {{
         max-width: 980px;
         padding-top: 1.5rem;
-        padding-bottom: 140px !important;
+        padding-bottom: 160px !important;
     }}
 
     /* Ocultar avatares */
@@ -132,10 +132,15 @@ st.markdown(
         gap: 0px !important;
     }}
 
-    /* POSICIONA OS BOTÕES LOGO ACIMA DO CAMPO DE DIGITAÇÃO */
+    /* SUBIR O CAMPO DE TEXTO PARA DAR ESPAÇO AOS BOTÕES ABAIXO */
+    div[data-testid="stBottom"] {{
+        padding-bottom: 50px !important;
+    }}
+
+    /* FIXA OS BOTÕES LADO A LADO NA PARTE INFERIOR */
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {{
         position: fixed !important;
-        bottom: 72px !important; /* Posicionado perfeitamente sobre a caixa de texto */
+        bottom: 10px !important;
         left: 16px !important;
         z-index: 99999 !important;
         background: transparent !important;
@@ -144,22 +149,21 @@ st.markdown(
         padding: 0 !important;
         display: flex !important;
         flex-direction: row !important;
-        gap: 8px !important;
+        gap: 10px !important;
         width: auto !important;
     }}
 
-    /* ESTILO DOS BOTÕES CIRCULARES */
+    /* ESTILO DOS BOTÕES CIRCULARES DA BARRA */
     div[data-testid="stPopover"] > button {{
         background: rgba(12, 22, 36, 0.90) !important;
         border: 1px solid rgba(0, 210, 255, 0.4) !important;
         color: #00d2ff !important;
         font-size: 1.1rem !important;
         font-weight: bold !important;
-        border-radius: 50% !important;
-        width: 38px !important;
+        border-radius: 12px !important;
         height: 38px !important;
-        min-width: 38px !important;
-        padding: 0 !important;
+        min-width: 50px !important;
+        padding: 0 10px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -172,7 +176,7 @@ st.markdown(
 )
 
 # ============================================================
-# 🤖 CABEÇALHO LIMPO
+# 🤖 CABEÇALHO
 # ============================================================
 
 st.markdown(f"## 🤖 {AI_NAME}")
@@ -258,7 +262,7 @@ if st.session_state.ferramenta_ativa:
             st.rerun()
 
 # ============================================================
-# 🧰 ÍCONES FLUTUANTES EMBAIXO
+# 🧰 BOTÕES POSICIONADOS LADO A LADO NA PARTE INFERIOR
 # ============================================================
 
 col_menu, col_video_cfg = st.columns([1, 1])
@@ -440,4 +444,4 @@ if pergunta:
 
         except Exception as erro:
             st.error(f"❌ Erro ao conversar com a Alex: {erro}")
-            
+
