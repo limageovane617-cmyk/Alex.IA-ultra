@@ -1,5 +1,5 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + BOTOES MINIMALISTAS
+# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE + ÍCONES COMPACTOS
 # Criado por: Geovani
 # ============================================================
 
@@ -111,7 +111,7 @@ st.markdown(
     .main .block-container {{
         max-width: 980px;
         padding-top: 1.5rem;
-        padding-bottom: 150px !important;
+        padding-bottom: 140px !important;
     }}
 
     /* Ocultar avatares */
@@ -122,7 +122,7 @@ st.markdown(
         display: none !important;
     }}
 
-    /* Balões da Alex */
+    /* Balões de conversa */
     div[data-testid="stChatMessage"] {{
         padding: 14px 18px !important;
         background: rgba(12, 22, 36, 0.75) !important;
@@ -132,32 +132,44 @@ st.markdown(
         gap: 0px !important;
     }}
 
-    /* BARRA FLUTUANTE SEM DETALHES/SEM QUADRO ESCURO */
+    /* CONTAINER DOS ÍCONES FLUTUANTES */
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {{
         position: fixed !important;
-        bottom: 85px !important;
-        left: 50% !important;
-        transform: translateX(-50%) !important;
-        width: 90% !important;
-        max-width: 980px !important;
+        bottom: 80px !important;
+        left: calc(50% - 440px) !important;
         z-index: 9999 !important;
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
         padding: 0 !important;
+        display: flex !important;
+        gap: 10px !important;
+        width: auto !important;
     }}
 
-    /* BOTOES PÍLULA MINIMALISTAS */
+    @media (max-width: 980px) {{
+        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {{
+            left: 20px !important;
+        }}
+    }}
+
+    /* BOTÕES APENAS COM ÍCONE (DESIGN CIRCULAR CLEAN) */
     div[data-testid="stPopover"] > button {{
         background: rgba(12, 22, 36, 0.85) !important;
-        border: 1px solid rgba(0, 210, 255, 0.35) !important;
+        border: 1px solid rgba(0, 210, 255, 0.4) !important;
         color: #00d2ff !important;
-        font-size: 0.85rem !important;
-        font-weight: 600 !important;
-        border-radius: 20px !important;
-        padding: 4px 12px !important;
+        font-size: 1.1rem !important;
+        font-weight: bold !important;
+        border-radius: 50% !important;
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 42px !important;
+        padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
         backdrop-filter: blur(8px) !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
     }}
     </style>
     """,
@@ -248,13 +260,13 @@ if st.session_state.ferramenta_ativa:
             st.rerun()
 
 # ============================================================
-# 🧰 BOTOES FLUTUANTES MINIMALISTAS
+# 🧰 ÍCONES FLUTUANTES MINIMALISTAS (SEM TEXTO)
 # ============================================================
 
 col_menu, col_video_cfg = st.columns([1, 1])
 
 with col_menu:
-    with st.popover("➕ Ferramentas"):
+    with st.popover("➕"):
         st.subheader("🧰 Ferramentas da Ultra")
 
         if st.button("💻 Código", use_container_width=True):
@@ -277,7 +289,7 @@ with col_menu:
             st.rerun()
 
 with col_video_cfg:
-    with st.popover("🎬 Ajustes Vídeo"):
+    with st.popover("🎬"):
         st.subheader("⚙️ Configurar Vídeo Automático")
 
         st.session_state.video_duracao = st.slider(
