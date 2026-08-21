@@ -50,7 +50,7 @@ MOTORES_VIDEO = [
     "Wan 2.2 — R3GM",
     "Wan 2.2 — Upsampler",
     "LTX-2.3 — Hugging Face",
-    "Alex Motion Engine (Cinematic)",
+    "Alex Dynamic Motion Engine",
 ]
 
 PASTA = Path("videos_gerados")
@@ -277,7 +277,7 @@ def gerar_ltx_huggingface(
 def gerar_video_local_fallback(
     texto: str, imagem_bytes: Optional[bytes] = None, duracao: float = 5.0
 ) -> dict:
-    """Gera um MP4 animado de 5 segundos com efeito de movimento de câmera (Ken Burns Zoom/Pan)."""
+    """Gera um MP4 animado com movimento dinâmico de câmera (Zoom de 35% + Pan) bem perceptível."""
     if not imagem_bytes:
         imagem_bytes = obter_imagem_prompt(texto)
 
@@ -301,14 +301,20 @@ def gerar_video_local_fallback(
         progresso = i / float(total_frames)
 
         if imagem_bytes and w > 10 and h > 10:
-            scale = 1.0 + (0.15 * progresso)
+            # Zoom mais forte (35% de ampliação)
+            scale = 1.0 + (0.35 * progresso)
             nw, nh = int(w * scale), int(h * scale)
             img_scaled = base.resize((nw, nh), Image.Resampling.LANCZOS)
 
-            crop_x = int((nw - w) / 2 + (15 * progresso))
-            crop_y = int((nh - h) / 2)
-            crop_x = max(0, min(crop_x, nw - w))
-            crop_y = max(0, min(crop_y, nh - h))
+            # Movimento dinâmico de pan (câmera deslizando)
+            max_x = nw - w
+            max_y = nh - h
+            
+            crop_x = int(max_x * (0.5 + 0.5 * np.sin(progresso * np.pi)))
+            crop_y = int(max_y * progresso)
+
+            crop_x = max(0, min(crop_x, max_x))
+            crop_y = max(0, min(crop_y, max_y))
 
             frame = img_scaled.crop((crop_x, crop_y, crop_x + w, crop_y + h))
             frame = frame.resize((512, 512), Image.Resampling.LANCZOS)
@@ -336,7 +342,7 @@ def gerar_video_local_fallback(
 
     return {
         "sucesso": True,
-        "motor": "Alex Motion Engine (Cinematic Motion)",
+        "motor": "Alex Dynamic Motion Engine",
         "video": caminho_final,
         "arquivo": caminho_final,
         "fallback": True,
@@ -364,13 +370,12 @@ def gerar_video_automatico(
     if not texto:
         return {"sucesso": False, "erro": "O movimento está vazio."}
 
-    # Se não foi fornecida uma imagem, gera a imagem por prompt antes de animar
     if not imagem_bytes:
         imagem_bytes = obter_imagem_prompt(texto)
 
     erros = []
 
-    # 1. Tentar APIs em Nuvem (Hugging Face)
+    # 1. Tentar GPUs em Nuvem (Hugging Face)
     if imagem_bytes:
         try:
             return gerar_r3gm(imagem_bytes, nome_imagem, texto, camera, duracao)
@@ -389,7 +394,7 @@ def gerar_video_automatico(
     except Exception as erro:
         erros.append("LTX-2.3: " + str(erro))
 
-    # 2. Fallback de Animação de Movimento Local (Garantido de 5s)
+    # 2. Fallback de Movimento Dinâmico
     try:
         return gerar_video_local_fallback(
             texto, imagem_bytes=imagem_bytes, duracao=duracao
@@ -460,5 +465,5 @@ __all__ = [
     "gerar_video_imagem",
     "mostrar_configuracao_video",
     "status_video",
-    ]
-            
+]
+
