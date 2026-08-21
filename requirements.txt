@@ -22,3 +22,5 @@ rembg
 pillow
 onnxruntime
 gtts
+imageio
+imageio-ffmpeg
