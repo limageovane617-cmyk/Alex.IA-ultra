@@ -1,16 +1,18 @@
 # ============================================================
-# 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (COM FUNCTION CALLING & LOTE)
-# Criado por: Geovane
+# 🤖 ALEX IA ULTRA
+# APP PRINCIPAL
+# ============================================================
+# Criado por: Geovani
 # ============================================================
 
 import base64
-import importlib
+import os
 import sys
-import traceback
+import importlib
 from pathlib import Path
-from PIL import Image
 
 import streamlit as st
+
 
 # ============================================================
 # ⚙️ CONFIGURAÇÃO
@@ -20,61 +22,81 @@ st.set_page_config(
     page_title="Alex IA Ultra",
     page_icon="🤖",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="collapsed"
 )
 
+
 # ============================================================
-# 📦 IMPORTAÇÕES DOS MÓDULOS DE MÍDIA
+# 📦 IMPORTAÇÕES DO PROJETO
 # ============================================================
 
-try:
-    if "gerenciador_imagem" in sys.modules:
-        importlib.reload(sys.modules["gerenciador_imagem"])
+if "gerenciador_imagem" in sys.modules:
+    importlib.reload(sys.modules["gerenciador_imagem"])
+else:
     import gerenciador_imagem
-except Exception:
-    gerenciador_imagem = None
 
-try:
-    if "video" in sys.modules:
-        importlib.reload(sys.modules["video"])
-    import video
-except Exception:
-    video = None
+from gerenciador_imagem import mostrar_imagem
 
-from config_ultra import AI_NAME, CREATOR_NAME, GEMINI_MODEL, SYSTEM_PROMPT
-from core.brain import processar_resposta_alex
-from servicos import criar_cliente_gemini, verificar_servicos
+from config_ultra import (
+    SYSTEM_PROMPT,
+    GEMINI_MODEL,
+    AI_NAME,
+    CREATOR_NAME
+)
+
+from servicos import (
+    criar_cliente_gemini,
+    verificar_servicos
+)
+
+from memoria import (
+    salvar_memoria,
+    carregar_memorias,
+    apagar_memoria,
+    apagar_todas_memorias
+)
+
+from personagens import (
+    salvar_personagem,
+    carregar_personagem,
+    listar_personagens,
+    apagar_personagem
+)
+
 from voz import mostrar_audio
 
-# ============================================================
-# 🛠️ VALIDAÇÃO DE MÍDIA
-# ============================================================
+import video
 
-def midia_valida(caminho, tipo="video"):
-    """Verifica se o arquivo existe e é válido."""
-    if not caminho:
-        return False
-    str_caminho = str(caminho)
-    if str_caminho.startswith("http://") or str_caminho.startswith("https://"):
-        return True
-    p = Path(str_caminho)
-    return p.exists() and p.is_file() and p.stat().st_size > 100
+gerar_video = video.gerar_video
+mostrar_configuracao_video = video.mostrar_configuracao_video
+verificar_magic_hour = video.verificar_magic_hour
+
+from arquivos import ler_arquivo
+
+from codigo import (
+    preparar_pedido_codigo,
+    listar_linguagens
+)
+
 
 # ============================================================
 # 🧠 SESSION STATE
 # ============================================================
 
-if "mensagens" not in st.session_state:
-    st.session_state.mensagens = []
+DEFAULTS = {
+    "mensagens": [],
+    "personagem_atual": None,
+    "arquivo_contexto": "",
+    "arquivo_nome": "",
+    "ferramenta_ativa": None,
+    "usar_voz": False,
+    "ultima_imagem_caminho": None,
+}
 
-if "ferramenta_ativa" not in st.session_state:
-    st.session_state.ferramenta_ativa = None
+for chave, valor in DEFAULTS.items():
+    if chave not in st.session_state:
+        st.session_state[chave] = valor
 
-if "video_duracao" not in st.session_state:
-    st.session_state.video_duracao = 5
-
-if "video_proporcao" not in st.session_state:
-    st.session_state.video_proporcao = "16:9"
 
 # ============================================================
 # 🔐 SERVIÇOS
@@ -83,33 +105,54 @@ if "video_proporcao" not in st.session_state:
 servicos = verificar_servicos()
 
 if not servicos.get("gemini"):
-    st.error("🔐 A chave GEMINI_API_KEY não está configurada nos Secrets.")
+    st.error(
+        "🔐 A chave GEMINI_API_KEY não está configurada "
+        "nos Secrets do Streamlit."
+    )
     st.stop()
 
 cliente = criar_cliente_gemini()
 
 if cliente is None:
-    st.error("❌ Não foi possível criar a conexão com o Gemini.")
+    st.error(
+        "❌ Não foi possível criar a conexão com o Gemini."
+    )
     st.stop()
 
+
 # ============================================================
-# 🖼️ FUNDO & CSS
+# 🖼️ FUNDO
 # ============================================================
 
 def imagem_fundo_css():
     caminho = Path(__file__).with_name("fundo_chat.jpg")
+
     if not caminho.exists():
         return ""
+
     try:
-        dados = base64.b64encode(caminho.read_bytes()).decode("utf-8")
-        return f"background-image:url(data:image/jpeg;base64,{dados});"
+        dados = base64.b64encode(
+            caminho.read_bytes()
+        ).decode("utf-8")
+
+        return (
+            "background-image:url("
+            "data:image/jpeg;base64,"
+            f"{dados});"
+        )
+
     except Exception:
         return ""
 
 
+# ============================================================
+# 🎨 CSS
+# ============================================================
+
 st.markdown(
     f"""
     <style>
+
     .stApp {{
         {imagem_fundo_css()}
         background-size: cover;
@@ -128,297 +171,641 @@ st.markdown(
 
     .main .block-container {{
         max-width: 980px;
-        padding-top: 1.5rem;
-        padding-bottom: 160px !important;
+        padding-top: 1.2rem;
+        padding-bottom: 8rem;
     }}
 
-    [data-testid="stChatMessageAvatar"],
-    [data-testid="stChatMessageAvatarCustom"],
-    .stChatMessageAvatar,
-    div[data-testid="stChatMessage"] > div:first-child {{
-        display: none !important;
+    .tool-panel {{
+        margin: 0 auto .65rem;
+        padding: .75rem;
+        border-radius: 22px;
+        background: rgba(8,17,29,.92);
+        border: 1px solid rgba(130,210,255,.16);
     }}
 
-    div[data-testid="stChatMessage"] {{
-        padding: 14px 18px !important;
-        background: rgba(12, 22, 36, 0.75) !important;
-        border: 1px solid rgba(130, 210, 255, 0.18) !important;
-        border-radius: 18px 18px 18px 4px !important;
-        margin-bottom: 14px !important;
-        gap: 0px !important;
-    }}
-
-    div[data-testid="stBottom"] {{
-        padding-bottom: 50px !important;
-    }}
-
-    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {{
-        position: fixed !important;
-        bottom: 10px !important;
-        left: 16px !important;
-        z-index: 99999 !important;
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-        display: flex !important;
-        flex-direction: row !important;
-        gap: 10px !important;
-        width: auto !important;
-    }}
-
-    div[data-testid="stPopover"] > button {{
-        background: rgba(12, 22, 36, 0.90) !important;
-        border: 1px solid rgba(0, 210, 255, 0.4) !important;
-        color: #00d2ff !important;
-        font-size: 1.1rem !important;
-        font-weight: bold !important;
-        border-radius: 12px !important;
-        height: 38px !important;
-        min-width: 50px !important;
-        padding: 0 10px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        backdrop-filter: blur(8px) !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
-    }}
     </style>
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
+
 
 # ============================================================
 # 🤖 CABEÇALHO
 # ============================================================
+# Usamos componentes nativos do Streamlit aqui.
+# Assim, mesmo que o HTML seja tratado de forma diferente,
+# o nome nunca aparece como código na tela.
 
-st.markdown(f"## 🤖 {AI_NAME}")
-st.caption(f"Criada por {CREATOR_NAME} • inteligência artificial pessoal")
-st.divider()
+st.markdown(
+    f"## 🤖 {AI_NAME}"
+)
+
+st.caption(
+    f"Criada por {CREATOR_NAME} • inteligência artificial pessoal"
+)
+
 
 # ============================================================
-# 💬 HISTÓRICO DE MENSAGENS
+# 💬 HISTÓRICO
 # ============================================================
 
 for mensagem in st.session_state.mensagens:
+
     role = mensagem.get("role", "assistant")
-    texto = mensagem.get("content", "")
-    tipo = mensagem.get("tipo", "texto")
 
-    if role == "user":
-        st.markdown(
-            f"""
-            <div style="display: flex; justify-content: flex-end; margin-bottom: 14px;">
-                <div style="
-                    background: rgba(0, 132, 255, 0.32);
-                    border: 1px solid rgba(0, 180, 255, 0.45);
-                    color: #ffffff;
-                    padding: 10px 16px;
-                    border-radius: 18px 18px 2px 18px;
-                    max-width: 82%;
-                    font-size: 1rem;
-                    line-height: 1.5;
-                    word-wrap: break-word;">
-                    {texto}
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    else:
-        with st.chat_message("assistant"):
-            if tipo == "imagem" and midia_valida(mensagem.get("arquivo"), "imagem"):
-                st.image(mensagem["arquivo"], use_container_width=True)
+    with st.chat_message(role):
 
-            elif tipo == "video" and midia_valida(mensagem.get("arquivo"), "video"):
-                st.video(mensagem["arquivo"])
+        tipo = mensagem.get("tipo", "texto")
 
-            elif tipo == "multiplos_videos" and mensagem.get("lista_videos"):
-                for item in mensagem["lista_videos"]:
-                    if midia_valida(item.get("arquivo"), "video"):
-                        st.caption(f"🎬 {item.get('prompt', '')}")
-                        st.video(item["arquivo"])
+        if (
+            tipo == "imagem"
+            and mensagem.get("arquivo")
+            and os.path.exists(mensagem["arquivo"])
+        ):
+            st.image(
+                mensagem["arquivo"],
+                use_container_width=True
+            )
 
-            if texto:
-                st.write(texto)
+        elif (
+            tipo == "video"
+            and mensagem.get("arquivo")
+            and os.path.exists(mensagem["arquivo"])
+        ):
+            st.video(mensagem["arquivo"])
 
-            if tipo == "texto" and texto and not mensagem.get("is_error"):
-                try:
-                    mostrar_audio(texto)
-                except Exception:
-                    pass
+        texto = mensagem.get("content", "")
+
+        if texto:
+            st.write(texto)
+
 
 # ============================================================
-# 🛠️ PAINEL DE FERRAMENTAS ATIVAS
+# 🧰 MENU DE FERRAMENTAS
 # ============================================================
 
-if st.session_state.ferramenta_ativa:
-    ferramenta = st.session_state.ferramenta_ativa
+with st.popover("＋"):
 
-    with st.expander(f"🛠️ Módulo Ativo: {ferramenta.capitalize()}", expanded=True):
-        if ferramenta == "codigo":
-            st.info("💻 Envie seu código ou dúvida de programação direto no chat.")
+    st.markdown("### 🧰 Ferramentas da Ultra")
 
-        elif ferramenta == "arquivo":
-            st.file_uploader("Envie um arquivo para a Alex analisar:")
+    ferramentas = [
+        ("imagem", "🖼️ Imagem"),
+        ("video", "🎬 Vídeo"),
+        ("voz", "🔊 Voz"),
+        ("codigo", "💻 Código"),
+        ("arquivo", "📎 Arquivo"),
+        ("personagem", "🎭 Personagem"),
+        ("memoria", "🧠 Memória"),
+    ]
 
-        elif ferramenta == "personagem":
-            st.info("🎭 A personalidade da Alex está configurada em tom natural.")
+    for nome, rotulo in ferramentas:
 
-        elif ferramenta == "memoria":
-            st.info("🧠 Memória do sistema sincronizada.")
-
-        if st.button("Fechar Módulo"):
-            st.session_state.ferramenta_ativa = None
+        if st.button(
+            rotulo,
+            use_container_width=True
+        ):
+            st.session_state.ferramenta_ativa = nome
             st.rerun()
 
+    st.divider()
+
+    if st.button(
+        "🗑️ Limpar chat",
+        use_container_width=True
+    ):
+        st.session_state.mensagens = []
+        st.rerun()
+
+
 # ============================================================
-# 🧰 BOTÕES NA PARTE INFERIOR
+# 🧰 FERRAMENTA ATIVA
 # ============================================================
 
-col_menu, col_video_cfg = st.columns([1, 1])
+ferramenta = st.session_state.ferramenta_ativa
 
-with col_menu:
-    with st.popover("➕"):
-        st.subheader("🧰 Ferramentas da Ultra")
+if ferramenta:
 
-        if st.button("💻 Código", use_container_width=True):
-            st.session_state.ferramenta_ativa = "codigo"
+    st.markdown(
+        '<div class="tool-panel">',
+        unsafe_allow_html=True
+    )
 
-        if st.button("📎 Arquivo", use_container_width=True):
-            st.session_state.ferramenta_ativa = "arquivo"
+    if st.button("✕ Fechar ferramenta"):
+        st.session_state.ferramenta_ativa = None
+        st.rerun()
 
-        if st.button("🎭 Personagem", use_container_width=True):
-            st.session_state.ferramenta_ativa = "personagem"
+    # ========================================================
+    # 🖼️ IMAGEM
+    # ========================================================
 
-        if st.button("🧠 Memória", use_container_width=True):
-            st.session_state.ferramenta_ativa = "memoria"
+    if ferramenta == "imagem":
+
+        prompt_imagem = st.text_area(
+            "📝 Prompt da imagem",
+            key="tool_prompt_imagem",
+            height=100
+        )
+
+        if st.button(
+            "🖼️ Gerar imagem",
+            type="primary"
+        ):
+
+            if not prompt_imagem.strip():
+
+                st.warning(
+                    "Digite o que você quer na imagem."
+                )
+
+            else:
+
+                with st.spinner("🖼️ Criando imagem..."):
+
+                    sucesso = mostrar_imagem(
+                        prompt_imagem.strip()
+                    )
+
+                if sucesso:
+
+                    st.session_state.mensagens.append({
+                        "role": "assistant",
+                        "content": "🖼️ Imagem criada.",
+                        "tipo": "imagem",
+                        "arquivo": st.session_state.get(
+                            "ultima_imagem_caminho"
+                        ),
+                    })
+
+                    st.session_state.ferramenta_ativa = None
+                    st.rerun()
+
+    # ========================================================
+    # 🎬 VÍDEO
+    # ========================================================
+
+    elif ferramenta == "video":
+
+        st.markdown("### 🎬 Gerador de vídeo")
+
+        camera, proporcao, duracao = (
+            mostrar_configuracao_video()
+        )
 
         st.divider()
 
-        if st.button("🗑️ Limpar chat", use_container_width=True):
-            st.session_state.mensagens = []
-            st.session_state.ferramenta_ativa = None
-            st.rerun()
-
-with col_video_cfg:
-    with st.popover("🎬"):
-        st.subheader("⚙️ Configurar Vídeo Automático")
-
-        st.session_state.video_duracao = st.slider(
-            "Duração (Segundos):",
-            min_value=2,
-            max_value=15,
-            value=st.session_state.video_duracao,
-            step=1,
+        imagem = st.file_uploader(
+            "📤 Imagem de referência (opcional)",
+            type=["png", "jpg", "jpeg", "webp"],
+            key="video_imagem_upload"
         )
 
-        st.session_state.video_proporcao = st.selectbox(
-            "Proporção:",
-            options=["16:9", "9:16", "1:1"],
-            index=0,
+        if imagem:
+            st.image(
+                imagem,
+                caption="Imagem de referência",
+                use_container_width=True
+            )
+
+        descricao = st.text_area(
+            "📝 Descrição do vídeo",
+            key="tool_prompt_video",
+            height=130,
+            placeholder=(
+                "Exemplo: um personagem caminhando "
+                "lentamente em uma rua cinematográfica..."
+            )
         )
 
+        if st.button(
+            "🎬 Gerar vídeo",
+            type="primary",
+            use_container_width=True
+        ):
+
+            if not descricao.strip():
+
+                st.warning(
+                    "⚠️ Digite a descrição do vídeo."
+                )
+                st.stop()
+
+            if imagem:
+                imagem_bytes = imagem.getvalue()
+                nome_imagem = imagem.name
+            else:
+                imagem_bytes = None
+                nome_imagem = "imagem.png"
+
+            try:
+
+                with st.spinner(
+                    "🎬 Gerando vídeo... aguarde o processamento."
+                ):
+
+                    resultado = gerar_video(
+                        descricao=descricao.strip(),
+                        imagem_bytes=imagem_bytes,
+                        nome_imagem=nome_imagem,
+                        duracao=duracao,
+                        width=512,
+                        height=512,
+                        camera=camera,
+                        proporcao=proporcao,
+                    )
+
+                if resultado is None:
+
+                    st.error(
+                        "❌ O gerenciador de vídeo "
+                        "não retornou nenhuma resposta."
+                    )
+                    st.stop()
+
+                if not isinstance(resultado, dict):
+
+                    st.error(
+                        "❌ O gerenciador de vídeo "
+                        "retornou uma resposta inválida."
+                    )
+                    st.code(str(resultado))
+                    st.stop()
+
+                caminho = resultado.get("video")
+                motor = resultado.get("motor", "desconhecido")
+                sucesso = resultado.get("sucesso", False)
+                erro = resultado.get("erro")
+
+                if sucesso and caminho:
+
+                    caminho = str(caminho)
+
+                    if not os.path.exists(caminho):
+
+                        st.error(
+                            "❌ O motor informou que criou "
+                            "o vídeo, mas o arquivo não existe."
+                        )
+                        st.code(caminho)
+                        st.stop()
+
+                    st.success(
+                        f"🎉 Vídeo gerado com sucesso!\n\n"
+                        f"🎬 Motor: {motor}"
+                    )
+
+                    st.video(caminho)
+
+                    st.session_state.mensagens.append({
+                        "role": "assistant",
+                        "content": (
+                            "🎬 Vídeo criado com sucesso "
+                            f"usando {motor}."
+                        ),
+                        "tipo": "video",
+                        "arquivo": caminho,
+                    })
+
+                    st.session_state.ferramenta_ativa = None
+                    st.rerun()
+
+                else:
+
+                    st.error("❌ Nenhum vídeo foi gerado.")
+
+                    if erro:
+                        st.warning("Detalhes do erro:")
+                        st.code(str(erro))
+
+                    st.markdown("### 🔎 Resposta do gerenciador")
+                    st.json(resultado)
+
+            except Exception as erro_video:
+
+                st.error(
+                    "❌ O gerador de vídeo encontrou um erro."
+                )
+
+                st.code(str(erro_video))
+
+    # ========================================================
+    # 🔊 VOZ
+    # ========================================================
+
+    elif ferramenta == "voz":
+
+        st.session_state.usar_voz = st.checkbox(
+            "🔊 Ler respostas da Alex em voz",
+            value=st.session_state.usar_voz
+        )
+
+        st.info(
+            "A voz será usada nas próximas respostas."
+        )
+
+    # ========================================================
+    # 💻 CÓDIGO
+    # ========================================================
+
+    elif ferramenta == "codigo":
+
+        st.selectbox(
+            "Linguagem",
+            listar_linguagens(),
+            key="tool_linguagem_codigo"
+        )
+
+    # ========================================================
+    # 📎 ARQUIVO
+    # ========================================================
+
+    elif ferramenta == "arquivo":
+
+        arquivo = st.file_uploader(
+            "📎 Enviar arquivo",
+            type=["pdf", "txt", "docx"],
+            key="tool_arquivo_upload"
+        )
+
+        if arquivo:
+
+            if st.button("📥 Ler arquivo"):
+
+                texto, erro = ler_arquivo(arquivo)
+
+                if erro:
+
+                    st.error(erro)
+
+                else:
+
+                    st.session_state.arquivo_contexto = texto[:50000]
+                    st.session_state.arquivo_nome = arquivo.name
+
+                    st.success("✅ Arquivo carregado.")
+
+    # ========================================================
+    # 🎭 PERSONAGEM
+    # ========================================================
+
+    elif ferramenta == "personagem":
+
+        nomes = listar_personagens()
+
+        escolhido = st.selectbox(
+            "🎭 Personagem salvo",
+            ["Nenhum"] + nomes,
+            key="personagem_escolhido"
+        )
+
+        dados = (
+            carregar_personagem(escolhido)
+            if escolhido != "Nenhum"
+            else None
+        )
+
+        nome = st.text_input(
+            "Nome",
+            value=dados.get("nome", "") if dados else ""
+        )
+
+        idade = st.text_input(
+            "Idade",
+            value=dados.get("idade", "") if dados else ""
+        )
+
+        aparencia = st.text_area(
+            "Aparência",
+            value=dados.get("aparencia", "") if dados else ""
+        )
+
+        roupa = st.text_input(
+            "Roupa",
+            value=dados.get("roupa", "") if dados else ""
+        )
+
+        personalidade = st.text_area(
+            "Personalidade",
+            value=dados.get("personalidade", "") if dados else ""
+        )
+
+        if st.button("💾 Salvar personagem"):
+
+            if nome.strip():
+
+                salvar_personagem(
+                    nome,
+                    idade,
+                    aparencia,
+                    roupa,
+                    personalidade
+                )
+
+                st.session_state.personagem_atual = {
+                    "nome": nome,
+                    "idade": idade,
+                    "aparencia": aparencia,
+                    "roupa": roupa,
+                    "personalidade": personalidade,
+                }
+
+                st.success("✅ Personagem salvo.")
+                st.rerun()
+
+    # ========================================================
+    # 🧠 MEMÓRIA
+    # ========================================================
+
+    elif ferramenta == "memoria":
+
+        nova = st.text_area(
+            "🧠 Salvar nova memória",
+            key="memoria_nova"
+        )
+
+        if st.button("💾 Salvar memória"):
+
+            if nova.strip():
+
+                salvar_memoria(nova.strip())
+
+                st.success("✅ Memória salva.")
+                st.rerun()
+
+    st.markdown(
+        "</div>",
+        unsafe_allow_html=True
+    )
+
+
 # ============================================================
-# 💬 ENTRADA DO CHAT COM FALLBACK OBRIGATÓRIO DE MÍDIA
+# 💬 CHAT
 # ============================================================
 
-pergunta = st.chat_input("Digite sua mensagem para Alex...")
+pergunta = st.chat_input(
+    "Digite sua mensagem para a Alex..."
+)
 
 if pergunta:
-    pergunta_limpa = pergunta.strip()
-    if not pergunta_limpa:
+
+    pergunta = pergunta.strip()
+
+    if not pergunta:
         st.stop()
 
     st.session_state.mensagens.append({
         "role": "user",
-        "content": pergunta_limpa,
+        "content": pergunta,
     })
 
-    with st.chat_message("assistant"):
-        with st.spinner("🤖 Alex IA está processando..."):
-            config_vid = {
-                "duracao": st.session_state.video_duracao,
-                "proporcao": st.session_state.video_proporcao,
-            }
+    low = pergunta.lower()
 
-            resultado = processar_resposta_alex(
-                cliente=cliente,
-                modelo_id=GEMINI_MODEL,
-                prompt_sistema=SYSTEM_PROMPT,
-                historico=st.session_state.mensagens,
-                mensagem_usuario=pergunta_limpa,
-                config_video=config_vid,
-            )
+    # ========================================================
+    # 🎬 COMANDO VIDEO:
+    # ========================================================
 
-            msg_low = pergunta_limpa.lower()
-            houve_erro = False
+    if low.startswith("video:"):
 
-            # 🎬 FORÇA A GERAÇÃO DE VÍDEO CASO O BRAIN NÃO TENHA DISPARADO A FERRAMENTA
-            if any(w in msg_low for w in ["video", "vídeo"]) and not midia_valida(resultado.get("arquivo"), "video"):
-                if video and hasattr(video, "gerar_video"):
-                    try:
-                        res_v = video.gerar_video(
-                            prompt=pergunta_limpa,
-                            duracao=st.session_state.video_duracao,
-                            proporcao=st.session_state.video_proporcao,
+        descricao = pergunta[6:].strip()
+
+        camera = "Sony FX6"
+        proporcao = "16:9"
+        duracao = 5
+
+        try:
+
+            with st.chat_message("assistant"):
+
+                with st.spinner("🎬 Gerando vídeo..."):
+
+                    resultado = gerar_video(
+                        descricao=descricao,
+                        camera=camera,
+                        proporcao=proporcao,
+                        duracao=duracao,
+                        width=512,
+                        height=512,
+                    )
+
+                if (
+                    isinstance(resultado, dict)
+                    and resultado.get("sucesso")
+                    and resultado.get("video")
+                ):
+
+                    caminho = resultado["video"]
+
+                    st.success(
+                        "🎬 Vídeo gerado com "
+                        f"{resultado.get('motor')}"
+                    )
+
+                    st.video(caminho)
+
+                    st.session_state.mensagens.append({
+                        "role": "assistant",
+                        "content": "🎬 Vídeo gerado com sucesso.",
+                        "tipo": "video",
+                        "arquivo": caminho,
+                    })
+
+                else:
+
+                    st.error(
+                        "❌ Não foi possível gerar o vídeo."
+                    )
+
+                    if isinstance(resultado, dict):
+                        st.code(
+                            str(
+                                resultado.get(
+                                    "erro",
+                                    resultado
+                                )
+                            )
                         )
-                        caminho_v = res_v.get("arquivo") if isinstance(res_v, dict) else res_v
-                        
-                        if midia_valida(caminho_v, "video"):
-                            resultado["tipo"] = "video"
-                            resultado["arquivo"] = caminho_v
-                            resultado["texto"] = f"🎬 Vídeo gerado: **{pergunta_limpa}**"
-                        else:
-                            houve_erro = True
-                            st.error(f"⚠️ O arquivo de vídeo gerado não foi encontrado ou está corrompido. Retorno do módulo: {res_v}")
-                            resultado["texto"] = "Não foi possível carregar o arquivo MP4."
-                    except Exception as e:
-                        houve_erro = True
-                        st.error(f"❌ Erro ao executar módulo de vídeo: {e}")
-                        resultado["texto"] = f"Erro no módulo de vídeo: {e}"
+                    else:
+                        st.code(str(resultado))
 
-            # 🖼️ FORÇA A GERAÇÃO DE IMAGEM CASO O BRAIN NÃO TENHA DISPARADO A FERRAMENTA
-            elif any(w in msg_low for w in ["imagem", "foto", "desenho"]) and not midia_valida(resultado.get("arquivo"), "imagem"):
-                if gerenciador_imagem:
-                    func_img = getattr(gerenciador_imagem, "gerar_imagem", None) or getattr(gerenciador_imagem, "criar_imagem", None)
-                    if func_img:
-                        try:
-                            res_i = func_img(pergunta_limpa)
-                            caminho_i = res_i.get("arquivo") if isinstance(res_i, dict) else res_i
-                            
-                            if midia_valida(caminho_i, "imagem"):
-                                resultado["tipo"] = "imagem"
-                                resultado["arquivo"] = caminho_i
-                                resultado["texto"] = f"🖼️ Imagem gerada: **{pergunta_limpa}**"
-                        except Exception as e:
-                            houve_erro = True
-                            st.error(f"❌ Erro ao executar módulo de imagem: {e}")
+        except Exception as erro:
 
-            # RENDERIZAÇÃO NA TELA
-            if resultado.get("tipo") == "imagem" and midia_valida(resultado.get("arquivo"), "imagem"):
-                st.image(resultado["arquivo"], use_container_width=True)
+            st.error("❌ Erro no gerador de vídeo.")
+            st.code(str(erro))
 
-            elif resultado.get("tipo") == "video" and midia_valida(resultado.get("arquivo"), "video"):
-                st.video(resultado["arquivo"])
+        st.stop()
 
-            if resultado.get("texto"):
-                st.write(resultado["texto"])
+    # ========================================================
+    # 🧠 MEMORIZAR
+    # ========================================================
 
-            # ÁUDIO (APENAS PARA TEXTO PURO)
-            if resultado.get("tipo") == "texto" and resultado.get("texto") and not houve_erro:
-                try:
-                    mostrar_audio(resultado["texto"])
-                except Exception:
-                    pass
+    if low.startswith("memorize:"):
 
-            st.session_state.mensagens.append({
-                "role": "assistant",
-                "content": resultado.get("texto", ""),
-                "tipo": resultado.get("tipo", "texto"),
-                "arquivo": resultado.get("arquivo") if midia_valida(resultado.get("arquivo"), resultado.get("tipo")) else None,
-                "is_error": houve_erro,
-            })
+        texto_memoria = pergunta[
+            len("memorize:"):
+        ].strip()
 
-    st.rerun()
-    
+        if texto_memoria:
+            salvar_memoria(texto_memoria)
+
+        st.success("🧠 Memória salva.")
+        st.stop()
+
+    # ========================================================
+    # 📚 CONTEXTO
+    # ========================================================
+
+    contexto = "\n".join(
+        f"{m['role']}: {m['content']}"
+        for m in st.session_state.mensagens[-20:]
+        if m.get("tipo") not in ("imagem", "video")
+    )
+
+    instrucao = (
+        f"{SYSTEM_PROMPT}\n\n"
+        "Responda sempre em português do Brasil.\n\n"
+        f"Histórico:\n{contexto}\n\n"
+        f"Pergunta:\n{pergunta}"
+    )
+
+    # ========================================================
+    # 🤖 GEMINI
+    # ========================================================
+
+    try:
+
+        with st.chat_message("assistant"):
+
+            with st.spinner(
+                "🤖 Alex IA está pensando..."
+            ):
+
+                resposta = cliente.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=instrucao
+                )
+
+                texto = (
+                    resposta.text
+                    if resposta.text
+                    else "Não consegui gerar uma resposta."
+                )
+
+            st.write(texto)
+
+            if st.session_state.usar_voz:
+                mostrar_audio(texto)
+
+        st.session_state.mensagens.append({
+            "role": "assistant",
+            "content": texto,
+        })
+
+    except Exception as erro:
+
+        st.error(
+            f"❌ Erro ao conversar com o Gemini: {erro}"
+        )
+
+                texto = (
+                    resposta.text
+                    if resposta.text
+            
