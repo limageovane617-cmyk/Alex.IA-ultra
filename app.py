@@ -1,14 +1,12 @@
 # ============================================================
 # 🤖 ALEX IA ULTRA — CHAT INTELIGENTE (COM FUNCTION CALLING & LOTE)
-# Criado por: Geovani
+# Criado por: Geovane
 # ============================================================
 
 import base64
 import importlib
 import sys
-import traceback
 from pathlib import Path
-from PIL import Image
 
 import streamlit as st
 
@@ -24,61 +22,18 @@ st.set_page_config(
 )
 
 # ============================================================
-# 📦 IMPORTAÇÕES SEGURAS DOS MÓDULOS DE MÍDIA
+# 📦 IMPORTAÇÕES DO PROJETO
 # ============================================================
 
-try:
-    if "gerenciador_imagem" in sys.modules:
-        importlib.reload(sys.modules["gerenciador_imagem"])
+if "gerenciador_imagem" in sys.modules:
+    importlib.reload(sys.modules["gerenciador_imagem"])
+else:
     import gerenciador_imagem
-except Exception as e:
-    gerenciador_imagem = None
-
-try:
-    if "video" in sys.modules:
-        importlib.reload(sys.modules["video"])
-    import video
-except Exception:
-    video = None
 
 from config_ultra import AI_NAME, CREATOR_NAME, GEMINI_MODEL, SYSTEM_PROMPT
 from core.brain import processar_resposta_alex
 from servicos import criar_cliente_gemini, verificar_servicos
 from voz import mostrar_audio
-
-# ============================================================
-# 🛠️ VALIDAÇÃO REAL DE MÍDIA (TESTA CABEÇALHO DO ARQUIVO)
-# ============================================================
-
-def midia_valida(caminho, tipo="video"):
-    """Verifica se o arquivo existe, tem tamanho >0 e cabeçalho de mídia válido."""
-    if not caminho:
-        return False
-    
-    str_caminho = str(caminho)
-    if str_caminho.startswith("http://") or str_caminho.startswith("https://"):
-        return True
-        
-    p = Path(str_caminho)
-    if not (p.exists() and p.is_file() and p.stat().st_size > 100):
-        return False
-
-    try:
-        dados = p.read_bytes()[:32]
-        
-        if tipo == "imagem":
-            with Image.open(p) as img:
-                img.verify()
-            return True
-            
-        elif tipo == "video":
-            headers_validos = [b"ftyp", b"\x1a\x45\xdf\xa3", b"RIFF"]
-            return any(h in dados for h in headers_validos)
-            
-    except Exception:
-        return False
-
-    return True
 
 # ============================================================
 # 🧠 SESSION STATE
@@ -111,6 +66,7 @@ cliente = criar_cliente_gemini()
 if cliente is None:
     st.error("❌ Não foi possível criar a conexão com o Gemini.")
     st.stop()
+
 
 # ============================================================
 # 🖼️ FUNDO & CSS
@@ -247,22 +203,36 @@ for mensagem in st.session_state.mensagens:
         )
     else:
         with st.chat_message("assistant"):
-            if tipo == "imagem" and midia_valida(mensagem.get("arquivo"), "imagem"):
+            if (
+                tipo == "imagem"
+                and mensagem.get("arquivo")
+                and Path(mensagem["arquivo"]).exists()
+            ):
                 st.image(mensagem["arquivo"], use_container_width=True)
 
-            elif tipo == "video" and midia_valida(mensagem.get("arquivo"), "video"):
-                st.video(mensagem["arquivo"])
+            elif (
+                tipo == "video"
+                and mensagem.get("arquivo")
+                and Path(mensagem["arquivo"]).exists()
+            ):
+                if mensagem["arquivo"].endswith(".gif"):
+                    st.image(mensagem["arquivo"], use_container_width=True)
+                else:
+                    st.video(mensagem["arquivo"])
 
             elif tipo == "multiplos_videos" and mensagem.get("lista_videos"):
                 for item in mensagem["lista_videos"]:
-                    if midia_valida(item.get("arquivo"), "video"):
-                        st.caption(f"🎬 {item.get('prompt', '')}")
-                        st.video(item["arquivo"])
+                    if item.get("arquivo") and Path(item["arquivo"]).exists():
+                        st.caption(f"🎬 {item.get('prompt')}")
+                        if item["arquivo"].endswith(".gif"):
+                            st.image(item["arquivo"], use_container_width=True)
+                        else:
+                            st.video(item["arquivo"])
 
             if texto:
                 st.write(texto)
 
-            if texto and not mensagem.get("is_error"):
+            if tipo == "texto" and texto:
                 try:
                     mostrar_audio(texto)
                 except Exception:
@@ -340,7 +310,7 @@ with col_video_cfg:
         )
 
 # ============================================================
-# 💬 ENTRADA DO CHAT
+# 💬 ENTRADA DO CHAT COM AUTONOMIA NATIVA (CORE/BRAIN)
 # ============================================================
 
 pergunta = st.chat_input("Digite sua mensagem para Alex...")
@@ -356,7 +326,7 @@ if pergunta:
     })
 
     with st.chat_message("assistant"):
-        with st.spinner("🤖 Alex IA está processando..."):
+        with st.spinner("🤖 Alex IA está pensando..."):
             config_vid = {
                 "duracao": st.session_state.video_duracao,
                 "proporcao": st.session_state.video_proporcao,
@@ -371,80 +341,27 @@ if pergunta:
                 config_video=config_vid,
             )
 
-            msg_low = pergunta_limpa.lower()
-            houve_erro = False
-
-            # 🎬 PROCESSAMENTO DE VÍDEO
-            if any(w in msg_low for w in ["video", "vídeo"]) and not midia_valida(resultado.get("arquivo"), "video"):
-                if video and hasattr(video, "gerar_video"):
-                    try:
-                        res_v = video.gerar_video(
-                            prompt=pergunta_limpa,
-                            duracao=st.session_state.video_duracao,
-                            proporcao=st.session_state.video_proporcao,
-                        )
-                        caminho_v = res_v.get("arquivo") if isinstance(res_v, dict) else res_v
-                        
-                        if midia_valida(caminho_v, "video"):
-                            resultado["tipo"] = "video"
-                            resultado["arquivo"] = caminho_v
-                            resultado["texto"] = "Aqui está o seu vídeo!"
-                        else:
-                            houve_erro = True
-                            err_msg = f"⚠️ O arquivo retornado por `video.py` não é um MP4 válido. Retorno obtido: {res_v}"
-                            st.error(err_msg)
-                            resultado["texto"] = err_msg
-                            resultado["tipo"] = "texto"
-                    except Exception as e:
-                        houve_erro = True
-                        err_trace = traceback.format_exc()
-                        st.error(f"❌ Erro ao executar video.py:\n```\n{err_trace}\n```")
-                        resultado["texto"] = f"Erro na geração do vídeo: {e}"
-                        resultado["tipo"] = "texto"
-                else:
-                    houve_erro = True
-                    st.error("❌ O módulo `video.py` não possui a função `gerar_video` ou não foi importado.")
-                    resultado["texto"] = "Módulo de vídeo indisponível."
-
-            # 🖼️ PROCESSAMENTO DE IMAGEM
-            elif any(w in msg_low for w in ["imagem", "foto", "desenho", "criar imagem", "cria uma imagem"]) and not midia_valida(resultado.get("arquivo"), "imagem"):
-                if gerenciador_imagem:
-                    func_img = getattr(gerenciador_imagem, "gerar_imagem", None) or getattr(gerenciador_imagem, "criar_imagem", None)
-                    if func_img:
-                        try:
-                            res_i = func_img(pergunta_limpa)
-                            caminho_i = res_i.get("arquivo") if isinstance(res_i, dict) else res_i
-                            
-                            if midia_valida(caminho_i, "imagem"):
-                                resultado["tipo"] = "imagem"
-                                resultado["arquivo"] = caminho_i
-                                resultado["texto"] = "Aqui está a sua imagem!"
-                            else:
-                                houve_erro = True
-                                err_msg = f"⚠️ O arquivo gerado por `gerenciador_imagem.py` não é uma imagem válida. Retorno obtido: {res_i}"
-                                st.error(err_msg)
-                                resultado["texto"] = err_msg
-                                resultado["tipo"] = "texto"
-                        except Exception as e:
-                            houve_erro = True
-                            err_trace = traceback.format_exc()
-                            st.error(f"❌ Erro ao executar gerenciador_imagem.py:\n```\n{err_trace}\n```")
-                            resultado["texto"] = f"Erro na geração da imagem: {e}"
-                            resultado["tipo"] = "texto"
-
-            # Renderiza Mídia
-            if resultado.get("tipo") == "imagem" and midia_valida(resultado.get("arquivo"), "imagem"):
+            if resultado["tipo"] == "imagem" and resultado.get("arquivo"):
                 st.image(resultado["arquivo"], use_container_width=True)
 
-            elif resultado.get("tipo") == "video" and midia_valida(resultado.get("arquivo"), "video"):
-                st.video(resultado["arquivo"])
+            elif resultado["tipo"] == "video" and resultado.get("arquivo"):
+                if resultado["arquivo"].endswith(".gif"):
+                    st.image(resultado["arquivo"], use_container_width=True)
+                else:
+                    st.video(resultado["arquivo"])
 
-            # Renderiza Texto
-            if resultado.get("texto"):
-                st.write(resultado["texto"])
+            elif resultado["tipo"] == "multiplos_videos" and resultado.get("lista_videos"):
+                for item in resultado["lista_videos"]:
+                    if item.get("arquivo"):
+                        st.caption(f"🎬 {item.get('prompt')}")
+                        if item["arquivo"].endswith(".gif"):
+                            st.image(item["arquivo"], use_container_width=True)
+                        else:
+                            st.video(item["arquivo"])
 
-            # Voz (apenas se NÃO houver erro)
-            if resultado.get("texto") and not houve_erro:
+            st.write(resultado["texto"])
+
+            if resultado["tipo"] == "texto":
                 try:
                     mostrar_audio(resultado["texto"])
                 except Exception:
@@ -452,11 +369,10 @@ if pergunta:
 
             st.session_state.mensagens.append({
                 "role": "assistant",
-                "content": resultado.get("texto", ""),
-                "tipo": resultado.get("tipo", "texto"),
-                "arquivo": resultado.get("arquivo") if midia_valida(resultado.get("arquivo"), resultado.get("tipo")) else None,
-                "is_error": houve_erro,
+                "content": resultado["texto"],
+                "tipo": resultado["tipo"],
+                "arquivo": resultado.get("arquivo"),
+                "lista_videos": resultado.get("lista_videos"),
             })
 
     st.rerun()
-    
