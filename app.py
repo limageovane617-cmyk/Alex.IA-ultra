@@ -192,9 +192,6 @@ st.markdown(
 # ============================================================
 # 🤖 CABEÇALHO
 # ============================================================
-# Usamos componentes nativos do Streamlit aqui.
-# Assim, mesmo que o HTML seja tratado de forma diferente,
-# o nome nunca aparece como código na tela.
 
 st.markdown(
     f"## 🤖 {AI_NAME}"
@@ -783,11 +780,13 @@ if pergunta:
                     contents=instrucao
                 )
 
-                        texto = (
-            resposta.text
-            if resposta.text
-            else "Não consegui gerar uma resposta."
-        )
+                texto = (
+                    resposta.text
+                    if resposta.text
+                    else "Não consegui gerar uma resposta."
+                )
+
+            st.write(texto)
 
         st.session_state.mensagens.append({
             "role": "assistant",
