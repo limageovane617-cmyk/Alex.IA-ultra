@@ -3,8 +3,9 @@
 # Criada por Geovani
 # ============================================================
 
-# 🧠 Modelo principal da Alex (usando o 2.5 Flash / 1.5 Flash para melhor suporte a function calling)
-GEMINI_MODEL = "gemini-2.5-flash"
+# 🧠 Modelo atualizado da Alex
+GEMINI_MODEL = "gemini-3.6-flash"
+
 
 
 # 🤖 Personalidade / comportamento da Alex
