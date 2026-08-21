@@ -9,6 +9,7 @@ import os
 import random
 import time
 import urllib.parse
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -50,6 +51,10 @@ MOTORES_VIDEO = [
 PASTA = Path("videos_gerados")
 PASTA.mkdir(parents=True, exist_ok=True)
 
+HEADERS_REQ = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
 
 def _secret(nome: str) -> str:
     try:
@@ -79,51 +84,37 @@ def _nome_saida(prefixo: str, extensao: str = ".mp4") -> Path:
     return PASTA / f"{prefixo}_{int(time.time() * 1000)}{extensao}"
 
 
+def limpar_prompt(prompt: str) -> str:
+    """Remove comandos de texto deixando apenas o assunto principal."""
+    p = re.sub(r"(?i)^(cria|gere|faz|faça|gerar|criar)\s+(um\s+|uma\s+)?(vídeo|video)\s+(de\s+|do\s+|da\s+)?", "", prompt.strip())
+    return p if p else prompt
+
+
 def montar_prompt(movimento: str, camera: str = "Sony FX6") -> str:
-    return f"Animate image. Movement: {movimento}. Camera: {camera}. Cinematic."
+    return f"Animate image. Movement: {movimento}. Camera: {camera}. Cinematic high quality."
 
 
 def obter_imagem_prompt(prompt: str) -> Optional[bytes]:
-    """Obtém imagem base via IA ou provedores alternativos de alta disponibilidade."""
-    prompt_enc = urllib.parse.quote(prompt)
-    
-    # Tentativa 1: Pollinations AI
-    try:
-        url = f"https://image.pollinations.ai/prompt/{prompt_enc}?width=512&height=512&nologo=true&seed={random.randint(1,9999)}"
-        r = requests.get(url, timeout=8)
-        if r.status_code == 200 and len(r.content) > 2000:
-            return r.content
-    except Exception:
-        pass
+    """Obtém imagem com requisição autenticada contra bloqueios na nuvem."""
+    assunto = limpar_prompt(prompt)
+    prompt_enc = urllib.parse.quote(assunto)
+    seed = random.randint(1, 99999)
 
-    # Tentativa 2: Unsplash Source
-    try:
-        tag = prompt.split()[0] if prompt.split() else "nature"
-        url = f"https://source.unsplash.com/featured/512x512/?{urllib.parse.quote(tag)}"
-        r = requests.get(url, timeout=8)
-        if r.status_code == 200 and len(r.content) > 2000:
-            return r.content
-    except Exception:
-        pass
+    urls = [
+        f"https://image.pollinations.ai/prompt/{prompt_enc}?width=512&height=512&nologo=true&seed={seed}&model=flux",
+        f"https://image.pollinations.ai/prompt/{prompt_enc}?width=512&height=512&nologo=true&seed={seed}",
+        f"https://picsum.photos/512/512"
+    ]
+
+    for url in urls:
+        try:
+            r = requests.get(url, headers=HEADERS_REQ, timeout=10)
+            if r.status_code == 200 and len(r.content) > 3000:
+                return r.content
+        except Exception:
+            continue
 
     return None
-
-
-def criar_imagem_abstrata_dinamica(texto: str) -> Image.Image:
-    """Gera uma imagem artística colorida como último recurso."""
-    img = Image.new("RGB", (512, 512), color=(20, 20, 35))
-    draw = ImageDraw.Draw(img)
-    
-    # Círculos abstratos
-    for _ in range(12):
-        x = random.randint(0, 512)
-        y = random.randint(0, 512)
-        r = random.randint(50, 200)
-        cor = (random.randint(50, 255), random.randint(50, 255), random.randint(100, 255))
-        draw.ellipse([x - r, y - r, x + r, y + r], outline=cor, width=3)
-        
-    draw.text((30, 250), f"Alex Motion: {texto[:25]}...", fill=(255, 255, 255))
-    return img
 
 
 def _extrair_video_gradio(resultado: Any) -> Optional[str]:
@@ -146,7 +137,7 @@ def _salvar_video_gradio(origem: str, destino: Path) -> str:
     if Path(origem).exists():
         destino.write_bytes(Path(origem).read_bytes())
     elif origem.startswith("http"):
-        r = requests.get(origem, timeout=300)
+        r = requests.get(origem, headers=HEADERS_REQ, timeout=300)
         r.raise_for_status()
         destino.write_bytes(r.content)
     return str(destino)
@@ -183,19 +174,13 @@ def gerar_r3gm(imagem_bytes: bytes, nome_imagem: str, movimento: str, camera: st
 
 
 def gerar_video_local_fallback(texto: str, imagem_bytes: Optional[bytes] = None, duracao: float = 5.0) -> dict:
-    """Gera animação MP4 com Zoom & Pan sobre a imagem ou cenário abstrato."""
     if not imagem_bytes:
         imagem_bytes = obter_imagem_prompt(texto)
 
-    if imagem_bytes:
-        try:
-            base = Image.open(io.BytesIO(imagem_bytes)).convert("RGB")
-        except Exception:
-            base = criar_imagem_abstrata_dinamica(texto)
-    else:
-        base = criar_imagem_abstrata_dinamica(texto)
+    if not imagem_bytes:
+        raise RuntimeError("Não foi possível carregar a imagem base para o vídeo.")
 
-    base = base.resize((512, 512))
+    base = Image.open(io.BytesIO(imagem_bytes)).convert("RGB").resize((512, 512))
     w, h = base.size
     destino = _nome_saida("video_motion", extensao=".mp4")
     fps = 30
@@ -204,7 +189,7 @@ def gerar_video_local_fallback(texto: str, imagem_bytes: Optional[bytes] = None,
 
     for i in range(total_frames):
         prog = i / float(total_frames)
-        scale = 1.0 + (0.35 * prog)
+        scale = 1.0 + (0.30 * prog)
         nw, nh = int(w * scale), int(h * scale)
         img_scaled = base.resize((nw, nh), Image.Resampling.LANCZOS)
         
@@ -274,4 +259,4 @@ __all__ = [
     "NOME_MODULO", "MOTORES_VIDEO", "CAMERAS", "PROPORCOES", "DURACAO_PADRAO",
     "gerar_video", "gerar_video_automatico", "gerar_video_texto", "gerar_video_imagem",
     "mostrar_configuracao_video", "status_video",
-]
+               ]
