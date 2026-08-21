@@ -13,7 +13,14 @@ from typing import Any, Optional
 
 import streamlit as st
 import requests
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
+
+try:
+    import imageio
+    import numpy as np
+    IMAGEIO_AVAILABLE = True
+except ImportError:
+    IMAGEIO_AVAILABLE = False
 
 try:
     from gradio_client import Client, handle_file
@@ -48,7 +55,7 @@ MOTORES_VIDEO = [
     "Wan 2.2 — Upsampler",
     "LTX-2.3 — Hugging Face",
     "Magic Hour — LTX-2.3",
-    "Gerador Local (Offline)",
+    "Gerador Local (Fallback MP4)",
 ]
 
 PASTA = Path("videos_gerados")
@@ -106,8 +113,8 @@ def headers_magichour() -> dict:
     }
 
 
-def _nome_saida(prefixo: str) -> Path:
-    return PASTA / f"{prefixo}_{int(time.time() * 1000)}.mp4"
+def _nome_saida(prefixo: str, extensao: str = ".mp4") -> Path:
+    return PASTA / f"{prefixo}_{int(time.time() * 1000)}{extensao}"
 
 
 def montar_prompt(movimento: str, camera: str = "Sony FX6") -> str:
@@ -337,10 +344,9 @@ def gerar_ltx_huggingface(
 
 
 def gerar_video_local_fallback(texto: str, imagem_bytes: Optional[bytes] = None) -> dict:
-    """Gera um vídeo MP4 animado sem dependências de GPUs em nuvem ou limites."""
-    destino = _nome_saida("video_offline")
+    """Gera um arquivo MP4 válido localmente usando imageio/Pillow sem gastar GPU em nuvem."""
+    destino = _nome_saida("video_offline", extensao=".mp4")
     
-    # Tenta usar imagem enviada ou cria um fundo escuro com texto
     if imagem_bytes:
         base = Image.open(io.BytesIO(imagem_bytes)).convert("RGB")
         base = base.resize((512, 512))
@@ -349,27 +355,32 @@ def gerar_video_local_fallback(texto: str, imagem_bytes: Optional[bytes] = None)
         draw = ImageDraw.Draw(base)
         draw.text((20, 240), texto[:40] + "...", fill=(255, 255, 255))
 
-    # Cria quadros estáticos
     frames = []
-    for i in range(24): # ~1 a 2 segundos de loop
+    for i in range(30):  # ~1 segundo a 30fps
         frame = base.copy()
+        draw = ImageDraw.Draw(frame)
         if imagem_bytes:
-            # Aplica um leve efeito visual em loop
-            draw = ImageDraw.Draw(frame)
-            draw.rectangle([0, 0, 512, 512], outline=(0, 255, 200) if i % 2 == 0 else (0, 100, 255), width=2)
+            # Efeito sutil de brilho nas bordas
+            cor = (0, 255, 200) if i % 2 == 0 else (0, 100, 255)
+            draw.rectangle([0, 0, 511, 511], outline=cor, width=3)
         frames.append(frame)
 
-    # Salva frames sequenciais em MP4/GIF temporário ou grava diretamente
-    frames[0].save(
-        destino.with_suffix(".gif"),
-        save_all=True,
-        append_images=frames[1:],
-        duration=100,
-        loop=0
-    )
-    
-    # Para o Streamlit, o arquivo .gif pode ser exibido no container de vídeo ou retornado
-    caminho_final = str(destino.with_suffix(".gif"))
+    if IMAGEIO_AVAILABLE:
+        # Exporta como MP4 válido
+        np_frames = [np.array(f) for f in frames]
+        imageio.mimsave(str(destino), np_frames, fps=30)
+        caminho_final = str(destino)
+    else:
+        # Fallback de emergência se imageio não estiver presente
+        caminho_gif = destino.with_suffix(".gif")
+        frames[0].save(
+            caminho_gif,
+            save_all=True,
+            append_images=frames[1:],
+            duration=33,
+            loop=0
+        )
+        caminho_final = str(caminho_gif)
 
     return {
         "sucesso": True,
@@ -407,12 +418,12 @@ def gerar_video_automatico(
         try:
             return gerar_r3gm(imagem_bytes, nome_imagem, texto, camera, duracao)
         except Exception as erro:
-            erros.append("R3GM: Cota atingida ou indisponível")
+            erros.append("R3GM: " + str(erro))
 
         try:
             return gerar_upsampler(imagem_bytes, nome_imagem, texto, camera, duracao)
         except Exception as erro:
-            erros.append("Upsampler: Cota atingida")
+            erros.append("Upsampler: " + str(erro))
 
     try:
         return gerar_ltx_huggingface(
@@ -424,9 +435,9 @@ def gerar_video_automatico(
             nome_imagem=nome_imagem,
         )
     except Exception as erro:
-        erros.append("LTX-2.3: Excedeu cota ZeroGPU")
+        erros.append("LTX-2.3: " + str(erro))
 
-    # 2. Se tudo em nuvem falhar, acionar o Fallback Local (Sem limite/Sem erro)
+    # 2. Se tudo em nuvem falhar por limite de cota, acionar o Fallback MP4 Local
     try:
         return gerar_video_local_fallback(texto, imagem_bytes)
     except Exception as erro:
@@ -489,4 +500,5 @@ __all__ = [
     "gerar_video_imagem",
     "mostrar_configuracao_video",
     "status_video",
-    ]
+        ]
+            
